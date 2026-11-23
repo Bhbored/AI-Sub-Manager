@@ -6,6 +6,11 @@ import { nextRenewal } from '../main/renewal.mjs';
 import './style.css';
 
 const providers = { codex: 'OpenAI Codex', claude: 'Claude Code' };
+const setupHints = {
+  foreign: 'Claude Code already uses a custom status line, so usage capture was not enabled. See docs/provider-integrations.md to combine them.',
+  'no-node': 'Usage capture needs Node.js on your PATH. Install it and restart the monitor.',
+  error: 'Claude Code settings could not be updated. See docs/provider-integrations.md for manual setup.'
+};
 const labels = { starting: 'Checking CLI', missing: 'CLI missing', auth: 'Sign-in required', ready: 'Connected', unsupported: 'Usage unsupported', unavailable: 'Usage unavailable', disabled: 'Monitoring off', error: 'Refresh failed', refreshing: 'Refreshing' };
 const intervalOptions = [0, 1, 5, 10, 15, 30, 60];
 const dateLabel = value => new Date(value + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
@@ -40,6 +45,7 @@ function Dashboard({ data, now, run }) {
           <div><h2>{name}</h2><span className={'status ' + (status.connected ? 'connected' : '')}>{labels[status.state]}{status.version ? ' · v' + status.version : ''}</span></div>
         </div>
         {status.message && <p className="provider-message">{status.message}</p>}
+        {id === 'claude' && status.state === 'unsupported' && setupHints[data.statusLine] && <p className="provider-message">{setupHints[data.statusLine]}</p>}
         {snapshot && <div className="quota">
           {stale && <p className="stale">Cached usage · may be out of date</p>}
           {snapshot.windows.map((window, i) => {

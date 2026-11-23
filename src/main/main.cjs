@@ -5,6 +5,8 @@ const { pathToFileURL } = require('node:url');
 const { nextRenewal } = require('./renewal.mjs');
 const { openStore } = require('./store.cjs');
 const { normalize, defaults, ids } = require('./preferences.cjs');
+const { ensureStatusLine, buildCommand, settingsFile } = require('./providers/claude/setup.cjs');
+const { execFileSync } = require('node:child_process');
 
 const page = path.join(__dirname, '../../dist/index.html');
 const asset = name => path.join(__dirname, '../../assets', name);
@@ -19,8 +21,9 @@ let settings = defaults();
 const status = Object.fromEntries(ids.map(id => [id, { state: 'starting' }]));
 const cached = {};
 let storageError = '';
+let statusLine = 'pending';
 const state = () => ({
-  settings, status, cached, storageError,
+  settings, status, cached, storageError, statusLine,
   worker: Boolean(worker), version: app.getVersion()
 });
 const emit = () => {
@@ -37,6 +40,19 @@ function log(event, provider = null, result = null) {
     }
     fs.appendFileSync(file, JSON.stringify({ at: new Date().toISOString(), event, provider, result }) + '\n');
   } catch {}
+}
+function setupStatusLine() {
+  if (smokeDirectory || settings.disabled.claude) return;
+  let hasNode = false;
+  try {
+    const where = path.join(process.env.SystemRoot || 'C:\Windows', 'System32', 'where.exe');
+    hasNode = Boolean(execFileSync(where, ['$PATH:node.exe'], { windowsHide: true, timeout: 5000, encoding: 'utf8' }).trim());
+  } catch {}
+  statusLine = ensureStatusLine({
+    file: settingsFile(), hasNode,
+    command: buildCommand(path.join(__dirname, 'providers/claude/statusline.cjs'), path.join(root, 'claude-usage.json'))
+  });
+  log('claude.statusline', 'claude', statusLine);
 }
 function show() {
   if (!window || window.isDestroyed()) createWindow();
@@ -107,6 +123,7 @@ function updateSettings(value) {
   catch { throw Error('Local settings could not be saved.'); }
   const changed = ids.filter(id => next.disabled[id] !== settings.disabled[id]);
   settings = next;
+  if (changed.includes('claude') && !next.disabled.claude) setupStatusLine();
   checkRenewals();
   send({ type: 'settings', settings });
   for (const id of changed) send({ type: 'refresh', id });
@@ -184,6 +201,7 @@ else {
       for (const id of ids) cached[id] = store.latest(id);
     } catch { storageError = 'The local database is unavailable. Changes may not survive a restart.'; }
     log('app.start');
+    setupStatusLine();
     createWindow();
     tray = new Tray(asset('tray-icon.png'));
     tray.setToolTip('AI Usage Monitor');

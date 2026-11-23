@@ -5,7 +5,7 @@ const { createClaude } = require('./providers/claude/adapter.cjs');
 const root = process.argv[2];
 const port = process.parentPort;
 const tools = { codex: createTool(root, 'codex'), claude: createTool(root, 'claude') };
-const adapters = { codex: createCodex(tools.codex, process.argv[3]), claude: createClaude(tools.claude) };
+const adapters = { codex: createCodex(tools.codex, process.argv[3]), claude: createClaude(tools.claude, require('node:path').join(root, 'claude-usage.json')) };
 const cooldown = new Map();
 let settings = { interval: 10, paused: false };
 const send = (id, value) => port.postMessage({ type: 'status', id, value });

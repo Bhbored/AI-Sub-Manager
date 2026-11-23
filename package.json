@@ -44,6 +44,9 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "artifactName": "AI-Usage-Monitor-Setup-${version}.${ext}"
-    }
+    },
+    "asarUnpack": [
+      "src/main/providers/claude/statusline.cjs"
+    ]
   }
 }
