@@ -1,4 +1,4 @@
-﻿# AI Usage Monitor
+# AI Usage Monitor
 
 A compact Windows utility that reads subscription status through the official CLIs already on your PATH. Codex quota windows come from its documented app-server. Claude Code account status is supported. Its interactive usage display has no verified machine-readable collection method.
 
@@ -13,8 +13,10 @@ Open the dashboard and click Refresh. In Settings, enter your renewal dates, cho
 - `npm ci` installs development dependencies. Use Node.js 24.
 - `npm run dev` builds the renderer and launches Electron.
 - `npm test` runs protocol parsing, CLI discovery, scheduler, validation, and SQLite tests.
-- `npm run build` builds the production renderer.
+- `npm run build` type-checks the source and builds Electron and the Tailwind-styled renderer.
 - `npm run dist -- --x64` builds the Windows NSIS installer.
 - [Provider integration and architecture](docs/provider-integrations.md)
 - [Packaging, signing, and smoke testing](docs/packaging.md)
 - [Application versioning and release bumps](docs/versioning.md)
+
+- [TypeScript source layout](docs/source-layout.md)

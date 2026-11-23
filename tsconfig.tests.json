@@ -1,0 +1,5 @@
+{
+  "extends": "./tsconfig.desktop.json",
+  "compilerOptions": { "rootDir": ".", "outDir": "generated/tests" },
+  "include": ["tests"]
+}

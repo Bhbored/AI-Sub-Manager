@@ -1,0 +1,22 @@
+@import "tailwindcss" source(none);
+@source "./**/*.{ts,tsx}";
+
+@theme {
+  --color-background: #080d13;
+  --color-panel: #111a24;
+  --color-field: #0b141d;
+  --color-edge: #263747;
+  --color-foreground: #eff6fa;
+  --color-muted: #9eb2c0;
+  --color-accent: #50d4c4;
+  --color-warning: #e0b46d;
+  --font-sans: Inter, "Segoe UI", sans-serif;
+}
+@layer base {
+  :root { color-scheme: dark; }
+  body { @apply bg-background text-foreground font-sans; }
+  :focus-visible { @apply outline-2 outline-offset-3 outline-accent; }
+}
+.quota-meter { appearance: none; }
+.quota-meter::-webkit-progress-bar { @apply rounded-full bg-edge; }
+.quota-meter::-webkit-progress-value { @apply rounded-full bg-accent; }

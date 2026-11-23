@@ -1,4 +1,4 @@
-﻿# Provider integration and architecture
+# Provider integration and architecture
 
 | Provider | Discovery and sign-in | Subscription usage |
 | --- | --- | --- |
@@ -18,7 +18,7 @@ References: [Codex app-server](https://learn.chatgpt.com/docs/app-server), [Clau
 Claude Code reports `rate_limits` (`five_hour` and `seven_day`, each with `used_percentage` and `resets_at`) only to its configured `statusLine` command, and only for claude.ai subscribers after the first API response in a session. The app does not edit Claude settings. On startup, and whenever Claude monitoring is re-enabled, the app registers the collector in Claude Code's `settings.json` (`%CLAUDE_CONFIG_DIR%` or `~/.claude`): it adds a `statusLine` entry when none exists, repairs its own entry if the path changed, and never overwrites a status line it did not create (the Claude card then shows a hint). It also needs `node` on PATH. The entry looks like:
 
 ```json
-{ "statusLine": { "type": "command", "command": "node \"<app>/statusline.cjs\" \"<data-folder>/claude-usage.json\"" } }
+{ "statusLine": { "type": "command", "command": "node \"<install>/resources/app.asar.unpacked/dist-electron/providers/claude/statusline.cjs\" \"<data-folder>/claude-usage.json\"" } }
 ```
 
-To combine it with your own status line, call the script from yours with the same stdin. The script stores only the rate-limit fields in `claude-usage.json`; the worker reads it on each refresh. Data updates only while Claude Code is in use, so older values show as cached. 
+To combine it with your own status line, call the script from yours with the same stdin. The script stores only the rate-limit fields in `claude-usage.json`; the worker reads it on each refresh. Data updates only while Claude Code is in use, so older values show as cached.

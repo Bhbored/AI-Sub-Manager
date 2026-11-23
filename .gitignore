@@ -1,4 +1,4 @@
-﻿node_modules/
+node_modules/
 .npm-cache/
 .build-cache/
 dist/
@@ -6,3 +6,4 @@ dist-electron/
 release/
 *.pfx
 *.p12
+generated/

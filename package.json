@@ -2,23 +2,31 @@
   "name": "ai-usage-monitor",
   "version": "1.0.0",
   "description": "Local AI subscription usage monitor",
-  "main": "src/main/main.cjs",
+  "main": "dist-electron/desktop/main.js",
   "type": "module",
   "scripts": {
     "dev": "npm run build && electron .",
-    "build": "vite build --configLoader native",
-    "test": "node --test tests/*.test.mjs",
-    "dist": "npm run build && node scripts/dist.mjs",
-    "version:bump": "node scripts/bump-version.mjs"
+    "build": "npm run build:desktop && npm run build:ui && tsc -p tsconfig.ui.json && tsc -p tsconfig.scripts.json",
+    "test": "tsc -p tsconfig.tests.json && node --test generated/tests/tests/*.test.js",
+    "dist": "npm run build && node scripts/dist.ts",
+    "version:bump": "node scripts/bump-version.ts",
+    "build:desktop": "tsc -p tsconfig.desktop.json",
+    "build:ui": "tailwindcss -i src/ui/theme.css -o generated/theme.css --minify && vite build --configLoader native"
   },
   "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/react": "19.2.18",
+    "@types/react-dom": "19.2.5",
     "@vitejs/plugin-react": "^5.0.0",
     "electron": "44.4.3",
     "electron-builder": "^26.0.0",
     "lucide-react": "^0.468.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
-    "vite": "^7.0.0"
+    "tailwindcss": "4.3.5",
+    "typescript": "6.0.3",
+    "vite": "^7.0.0",
+    "@tailwindcss/cli": "4.3.5"
   },
   "build": {
     "appId": "local.aiusagemonitor.app",
@@ -28,8 +36,7 @@
     },
     "files": [
       "dist/**/*",
-      "src/main/**/*",
-      "src/worker/**/*",
+      "dist-electron/**/*",
       "assets/**/*"
     ],
     "win": {
@@ -46,7 +53,7 @@
       "artifactName": "AI-Usage-Monitor-Setup-${version}.${ext}"
     },
     "asarUnpack": [
-      "src/main/providers/claude/statusline.cjs"
+      "dist-electron/providers/claude/statusline.cjs"
     ]
   }
 }
