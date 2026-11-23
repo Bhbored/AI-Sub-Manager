@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { asRecord, isFiniteNumber, isoDate } from '../../shared/validation.js';
 import type { QuotaWindow } from '../../shared/contracts.js';
-import type { CliTool, ProviderAdapter } from '../windows-cli.js';
+import type { CliTool, ProviderAdapter } from '../cli.js';
 
 const durations = { five_hour: 300, seven_day: 10080 };
 

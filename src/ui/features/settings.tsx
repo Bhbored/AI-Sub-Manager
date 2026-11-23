@@ -4,9 +4,9 @@ import { Button, Card, Field, Toggle } from '../components/controls.js';
 
 const fieldStyle = 'mt-2 block w-full rounded-md border border-edge bg-field p-2 text-foreground';
 const heading = 'text-sm font-semibold';
-const windowsSettings = [
-  ['startup', 'Launch at Windows startup'],
-  ['startMinimized', 'Hide to tray on Windows startup'],
+const systemSettings = [
+  ['startup', 'Launch at login'],
+  ['startMinimized', 'Hide to tray at login'],
   ['closeToTray', 'Keep running when closed'],
   ['notifications', 'Desktop renewal notifications']
 ] as const;
@@ -54,8 +54,8 @@ export function Settings({ data, onSave, onLogs, onReset, onQuit }: Props) {
       {providerIds.map(id => <Toggle key={id} title={'Monitor ' + providerNames[id]} checked={!settings.disabled[id]} onChange={enabled => update({ disabled: { ...settings.disabled, [id]: !enabled } })}/>)}
     </Card>
     <Card className="space-y-3">
-      <h2 className={heading}>Windows</h2>
-      {windowsSettings.map(([key, label]) => <Toggle key={key} title={label} checked={settings[key]} onChange={value => update({ [key]: value })}/>)}
+      <h2 className={heading}>System</h2>
+      {systemSettings.map(([key, label]) => <Toggle key={key} title={label} checked={settings[key]} onChange={value => update({ [key]: value })}/>)}
     </Card>
     {providerIds.map(id => <SubscriptionForm key={id + JSON.stringify(settings.subscriptions[id])} id={id} saved={settings.subscriptions[id]} save={entry => update({ subscriptions: { ...settings.subscriptions, [id]: entry } })}/>)}
     <Card className="space-y-2">

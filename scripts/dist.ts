@@ -11,15 +11,22 @@ const root = new URL('../', import.meta.url);
 const manifest = readRelease(root);
 const { name, version } = manifest;
 const { values } = parseArgs({ options: {
+  platform: { type: 'string' },
   x64: { type: 'boolean' },
   'out-dir': { type: 'string' },
   'electron-dist': { type: 'string' }
 } });
 
-if (process.platform !== 'win32') throw Error('Run the Windows release build on Windows.');
-const output = resolve(values['out-dir'] ?? manifest.build.directories.output);
+const target = values.platform;
+if (target !== 'windows' && target !== 'linux') throw Error('Pass --platform windows or --platform linux (see npm run dist:windows and dist:linux).');
+if (target === 'windows' && process.platform !== 'win32') throw Error('Run the Windows release build on Windows.');
+if (target === 'linux' && process.platform !== 'linux') throw Error('Run the Linux release build on Linux (the .deb packager does not run on Windows; WSL works).');
+
+const output = resolve(values['out-dir'] ?? (target === 'linux' ? join(manifest.build.directories.output, 'linux') : manifest.build.directories.output));
 const artifacts = await build({
-  targets: Platform.WINDOWS.createTarget('nsis', Arch.x64),
+  targets: target === 'windows'
+    ? Platform.WINDOWS.createTarget('nsis', Arch.x64)
+    : Platform.LINUX.createTarget(['deb', 'AppImage'], Arch.x64),
   config: {
     ...manifest.build,
     electronVersion: manifest.devDependencies.electron,
@@ -27,25 +34,45 @@ const artifacts = await build({
     ...(values['electron-dist'] ? { electronDist: resolve(values['electron-dist']) } : {})
   }
 });
-const installers = artifacts.filter(file => file.toLowerCase().endsWith('.exe'));
-if (installers.length !== 1) throw Error('Expected one Windows installer from the current build.');
-const [installer] = installers;
 
-const powershell = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
-const metadata = JSON.parse(execFileSync(powershell, ['-NoProfile', '-NonInteractive', '-Command',
-  '$ErrorActionPreference = "Stop"; $item = Get-Item -LiteralPath $env:AIMUM_INSTALLER; ' +
-  '$v = $item.VersionInfo; $sign = Get-AuthenticodeSignature -LiteralPath $item.FullName; ' +
-  '@{Version = "$($v.ProductMajorPart).$($v.ProductMinorPart).$($v.ProductBuildPart)"; Signature = $sign.Status.ToString()} | ConvertTo-Json -Compress'
-], {
-  env: { ...process.env, AIMUM_INSTALLER: installer },
-  encoding: 'utf8', windowsHide: true
-}));
-if (metadata.Version !== version) throw Error('Installer version metadata does not match package.json.');
+let packages: string[];
+let description: string;
+let summary: string;
+if (target === 'windows') {
+  packages = artifacts.filter(file => file.toLowerCase().endsWith('.exe'));
+  if (packages.length !== 1) throw Error('Expected one Windows installer from the current build.');
+  const [installer] = packages;
+  const powershell = join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'WindowsPowerShell', 'v1.0', 'powershell.exe');
+  const metadata = JSON.parse(execFileSync(powershell, ['-NoProfile', '-NonInteractive', '-Command',
+    '$ErrorActionPreference = "Stop"; $item = Get-Item -LiteralPath $env:AIMUM_INSTALLER; ' +
+    '$v = $item.VersionInfo; $sign = Get-AuthenticodeSignature -LiteralPath $item.FullName; ' +
+    '@{Version = "$($v.ProductMajorPart).$($v.ProductMinorPart).$($v.ProductBuildPart)"; Signature = $sign.Status.ToString()} | ConvertTo-Json -Compress'
+  ], {
+    env: { ...process.env, AIMUM_INSTALLER: installer },
+    encoding: 'utf8', windowsHide: true
+  })) as { Version: string; Signature: string };
+  if (metadata.Version !== version) throw Error('Installer version metadata does not match package.json.');
+  description = 'Windows x64 NSIS installer. Authenticode status: **' + metadata.Signature + '**.';
+  summary = installer + ' (' + metadata.Signature + ')';
+} else {
+  const deb = artifacts.filter(file => file.endsWith('.deb'));
+  const image = artifacts.filter(file => file.endsWith('.AppImage'));
+  if (deb.length !== 1 || image.length !== 1) throw Error('Expected one .deb and one AppImage from the current build.');
+  packages = [...deb, ...image];
+  if (packages.some(file => !basename(file).includes(version))) throw Error('A Linux package filename does not match the package.json version.');
+  let control = 'not checked (dpkg-deb is not installed)';
+  try {
+    const debVersion = execFileSync('dpkg-deb', ['-f', deb[0], 'Version'], { encoding: 'utf8' }).trim();
+    if (debVersion !== version) throw Error('The .deb control version does not match package.json.');
+    control = 'control version ' + debVersion;
+  } catch (error) {
+    if (!(error instanceof Error) || !('code' in error) || error.code !== 'ENOENT') throw error;
+  }
+  description = 'Linux x64 packages: `.deb` for Debian and Ubuntu (`sudo apt install ./<file>.deb`) and a portable `.AppImage` (`chmod +x` then run). The packages are unsigned; .deb ' + control + '.';
+  summary = packages.join(', ');
+}
 
-const hash = createHash('sha256');
-for await (const chunk of createReadStream(installer)) hash.update(chunk);
-const checksum = hash.digest('hex');
-const directory = dirname(installer);
+const directory = dirname(packages[0]);
 let notes;
 try { notes = (await readFile(new URL('docs/release-notes/' + version + '.md', root), 'utf8')).trim(); }
 catch (error) {
@@ -53,8 +80,12 @@ catch (error) {
   notes = 'See the project README for features and setup.';
 }
 const title = manifest.build.productName || name;
-await writeFile(join(directory, 'release-notes.md'),
-  '# ' + title + ' ' + version + '\n\n' +
-  'Windows x64 NSIS installer. Authenticode status: **' + metadata.Signature + '**.\n\n' + notes + '\n');
-await writeFile(join(directory, 'checksums.sha256'), checksum + '  ' + basename(installer) + '\n');
-console.log('Release ' + version + ': ' + installer + ' (' + metadata.Signature + ')');
+await writeFile(join(directory, 'release-notes.md'), '# ' + title + ' ' + version + '\n\n' + description + '\n\n' + notes + '\n');
+let checksums = '';
+for (const file of packages) {
+  const hash = createHash('sha256');
+  for await (const chunk of createReadStream(file)) hash.update(chunk);
+  checksums += hash.digest('hex') + '  ' + basename(file) + '\n';
+}
+await writeFile(join(directory, 'checksums.sha256'), checksums);
+console.log('Release ' + version + ': ' + summary);

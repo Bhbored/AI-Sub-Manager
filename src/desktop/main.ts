@@ -4,6 +4,8 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { findOnPath } from '../providers/posix-cli.js';
+import { setAutostart } from './autostart.js';
 import { nextRenewal } from '../shared/renewal.js';
 import { openStore } from './storage.js';
 import { normalize, defaults } from '../shared/preferences.js';
@@ -55,8 +57,10 @@ function setupStatusLine() {
   if (smokeDirectory || settings.disabled.claude) return;
   let hasNode = false;
   try {
-    const where = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'where.exe');
-    hasNode = Boolean(execFileSync(where, ['$PATH:node.exe'], { windowsHide: true, timeout: 5000, encoding: 'utf8' }).trim());
+    if (process.platform === 'win32') {
+      const where = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'where.exe');
+      hasNode = Boolean(execFileSync(where, ['$PATH:node.exe'], { windowsHide: true, timeout: 5000, encoding: 'utf8' }).trim());
+    } else hasNode = findOnPath('node').length > 0;
   } catch {}
   statusLine = ensureStatusLine({
     file: settingsFile(), hasNode,
@@ -74,7 +78,7 @@ function createWindow() {
   const current = window = new BrowserWindow({
     show: false, width: 390, height: 680, resizable: false, maximizable: false,
     fullscreenable: false, autoHideMenuBar: true, backgroundColor: '#080d13',
-    icon: asset('icon.ico'), webPreferences: {
+    icon: asset(process.platform === 'win32' ? 'icon.ico' : 'icon.png'), webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'), contextIsolation: true,
       nodeIntegration: false, sandbox: true
     }
@@ -124,11 +128,13 @@ function checkRenewals() {
 }
 function updateSettings(value: unknown) {
   const next = normalize(value);
-  if (next.startup !== settings.startup && process.platform === 'win32') {
+  if (next.startup !== settings.startup) {
     try {
-      app.setLoginItemSettings({ openAtLogin: next.startup, args: ['--startup'] });
-      if (app.getLoginItemSettings({ args: ['--startup'] }).openAtLogin !== next.startup) throw Error();
-    } catch { throw Error('Windows did not save the startup setting.'); }
+      if (process.platform === 'win32') {
+        app.setLoginItemSettings({ openAtLogin: next.startup, args: ['--startup'] });
+        if (app.getLoginItemSettings({ args: ['--startup'] }).openAtLogin !== next.startup) throw Error();
+      } else if (process.platform === 'linux') setAutostart(next.startup, process.env.APPIMAGE || process.execPath);
+    } catch { throw Error('The startup setting could not be saved.'); }
   }
   try { store?.write('settings', next); }
   catch { throw Error('Local settings could not be saved.'); }
@@ -184,7 +190,7 @@ ipcMain.handle('refresh', guard(refresh));
 ipcMain.handle('logs', guard(async () => {
   const directory = path.join(root, 'logs');
   fs.mkdirSync(directory, { recursive: true });
-  if (await shell.openPath(directory)) throw Error('Windows could not open the log folder.');
+  if (await shell.openPath(directory)) throw Error('The log folder could not be opened.');
 }));
 ipcMain.handle('reset', guard(async () => {
   const { response } = await dialog.showMessageBox({
@@ -216,7 +222,8 @@ else {
     const current = createWindow();
     tray = new Tray(asset('tray-icon.png'));
     tray.setToolTip('AI Usage Monitor');
-    tray.on('double-click', show);
+    if (process.platform === 'linux') tray.on('click', show);
+    else tray.on('double-click', show);
     menu();
     if (!settings.startMinimized || !process.argv.includes('--startup')) current.once('ready-to-show', show);
     powerMonitor.on('resume', () => { send({ type: 'resume' }); checkRenewals(); });

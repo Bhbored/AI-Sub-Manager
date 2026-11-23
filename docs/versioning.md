@@ -26,7 +26,7 @@ The Electron runtime version, provider CLI versions, and SQLite schema revision 
 
 1. Run the appropriate bump command.
 2. Optionally write the release changes in `docs/release-notes/<version>.md`. Write the body only. The build adds the product name, version, and Authenticode status.
-3. Run `npm test`, then `npm run dist -- --x64`. The build stops if the manifest and lockfile versions disagree or the installer metadata does not match.
+3. Run `npm test`, then `npm run dist:windows -- --x64` (or `npm run dist:linux`). The build stops if the manifest and lockfile versions disagree or the installer metadata does not match.
 4. Review the generated `release/release-notes.md` and `release/checksums.sha256`. Smoke-test the unpacked application and installer before sharing them. Distribute the installer and checksum together.
 
 The default output is `release/`. Use `--out-dir <directory>` for a separate build and `--electron-dist <directory>` when building from a trusted local Electron archive or distribution that matches the pinned Electron version. For signing and smoke testing, see [Windows packaging](packaging.md).

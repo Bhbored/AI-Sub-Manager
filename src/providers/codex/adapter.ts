@@ -1,7 +1,7 @@
 import { CodexClient, type AppServerProcess } from './client.js';
 import { parseRateLimits } from './rate-limits.js';
 import { asRecord } from '../../shared/validation.js';
-import type { CliInfo, ProviderAdapter } from '../windows-cli.js';
+import type { CliInfo, ProviderAdapter } from '../cli.js';
 
 export function createCodex(tool: { start(info: CliInfo, args: string[]): AppServerProcess }, version: string): ProviderAdapter {
   return {

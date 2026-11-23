@@ -2,17 +2,11 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { stat } from 'node:fs/promises';
 import { win32 as path } from 'node:path';
-import type { ProviderId, ProviderStatus } from '../shared/contracts.js';
+import type { ProviderId } from '../shared/contracts.js';
+import { cliEnvironment, type Candidate, type CliInfo, type CliTool } from './cli.js';
 
 const run = promisify(execFile);
 const names = { codex: '@openai/codex', claude: '@anthropic-ai/claude-code' };
-interface Candidate {
-  executable: string;
-  prefix: string[];
-  location: string;
-}
-export interface CliInfo extends Candidate { version: string }
-export interface ProviderAdapter { refresh(info: CliInfo): Promise<ProviderStatus> }
 type Run = (file: string, args: string[], options: Parameters<typeof run>[2]) => Promise<{ stdout: string }>;
 type FileStat = (file: string) => Promise<{ isFile(): boolean }>;
 
@@ -22,12 +16,10 @@ export function parseWhere(output: string, name: string, extension: string): str
     path.basename(line).toLowerCase() === name + extension))];
 }
 
-export function createTool(root: string, id: ProviderId, execute: Run = run, fileStat: FileStat = stat) {
+export function createTool(root: string, id: ProviderId, execute: Run = run, fileStat: FileStat = stat): CliTool {
   const where = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32', 'where.exe');
   const options = { windowsHide: true, cwd: root, timeout: 15000, maxBuffer: 1024 * 1024, encoding: 'utf8' as const };
-  const env = Object.fromEntries(Object.entries(process.env).filter(([key]) =>
-    !/^(OPENAI_API_KEY|CODEX_API_KEY|ANTHROPIC_API_KEY|ANTHROPIC_AUTH_TOKEN|CLAUDE_CODE_OAUTH_TOKEN|NODE_OPTIONS|ELECTRON_RUN_AS_NODE)$/i.test(key)));
-  env.DISABLE_AUTOUPDATER = '1';
+  const env = cliEnvironment();
   async function locate(name: string, extension: string) {
     try {
       const { stdout } = await execute(where, ['$PATH:' + name + extension], options);
@@ -75,4 +67,3 @@ export function createTool(root: string, id: ProviderId, execute: Run = run, fil
       { cwd: root, env, windowsHide: true, stdio: ['pipe', 'pipe', 'ignore'] })
   };
 }
-export type CliTool = ReturnType<typeof createTool>;

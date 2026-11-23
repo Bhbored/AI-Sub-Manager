@@ -8,7 +8,8 @@
     "dev": "npm run build && electron .",
     "build": "npm run build:desktop && npm run build:ui && tsc -p tsconfig.ui.json && tsc -p tsconfig.scripts.json",
     "test": "tsc -p tsconfig.tests.json && node --test generated/tests/tests/*.test.js",
-    "dist": "npm run build && node scripts/dist.ts",
+    "dist:windows": "npm run build && node scripts/dist.ts --platform windows",
+    "dist:linux": "npm run build && node scripts/dist.ts --platform linux",
     "version:bump": "node scripts/bump-version.ts",
     "build:desktop": "tsc -p tsconfig.desktop.json",
     "build:ui": "tailwindcss -i src/ui/theme.css -o generated/theme.css --minify && vite build --configLoader native"
@@ -54,6 +55,21 @@
     },
     "asarUnpack": [
       "dist-electron/providers/claude/statusline.cjs"
-    ]
+    ],
+    "linux": {
+      "target": [
+        "deb",
+        "AppImage"
+      ],
+      "icon": "assets/icon.png",
+      "category": "Utility",
+      "synopsis": "Local AI subscription usage monitor",
+      "maintainer": "AI Usage Monitor <noreply@example.invalid>",
+      "executableName": "ai-usage-monitor",
+      "artifactName": "AI-Usage-Monitor-${version}-linux-${arch}.${ext}"
+    },
+    "deb": {
+      "packageName": "ai-usage-monitor"
+    }
   }
 }
