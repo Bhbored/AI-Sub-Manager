@@ -15,14 +15,15 @@ export async function smoke({ window, show, getState, directory }: { window: Bro
   };
   try {
     await until(() => window.webContents.executeJavaScript("document.querySelector('h1')?.textContent === 'Subscription usage'").catch(() => false));
-    assert.equal(window.isResizable(), false);
-    assert.equal(window.isMaximizable(), false);
+    assert.equal(window.isResizable(), false, 'window should not be resizable');
+    // Electron does not implement maximizable on Linux; isMaximizable() always reports true there.
+    if (process.platform !== 'linux') assert.equal(window.isMaximizable(), false, 'window should not be maximizable');
     await until(() => window.isVisible());
     window.close();
-    assert.equal(window.isVisible(), false);
-    assert.equal(getState().worker, true);
+    assert.equal(window.isVisible(), false, 'closing should hide the window to the tray');
+    assert.equal(getState().worker, true, 'worker should be running');
     show();
-    assert.equal(window.isVisible(), true);
+    assert.equal(window.isVisible(), true, 'show() should reveal the window');
     await window.webContents.executeJavaScript("document.querySelector('[aria-label=Settings]').click()");
     await until(() => window.webContents.executeJavaScript("document.querySelector('h1')?.textContent === 'Settings'"));
     await window.webContents.executeJavaScript("document.querySelector('[aria-label=\"Back to dashboard\"]').click()");

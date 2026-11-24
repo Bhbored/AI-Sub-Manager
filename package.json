@@ -2,6 +2,8 @@
   "name": "ai-usage-monitor",
   "version": "1.0.0",
   "description": "Local AI subscription usage monitor",
+  "homepage": "https://github.com/Bhbored/AI-Sub-Manager",
+  "desktopName": "ai-usage-monitor.desktop",
   "main": "dist-electron/desktop/main.js",
   "type": "module",
   "scripts": {
@@ -66,10 +68,23 @@
       "synopsis": "Local AI subscription usage monitor",
       "maintainer": "AI Usage Monitor <noreply@example.invalid>",
       "executableName": "ai-usage-monitor",
-      "artifactName": "AI-Usage-Monitor-${version}-linux-${arch}.${ext}"
+      "artifactName": "AI-Usage-Monitor-${version}-linux-${arch}.${ext}",
+      "syncDesktopName": true
     },
     "deb": {
-      "packageName": "ai-usage-monitor"
+      "packageName": "ai-usage-monitor",
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libsecret-1-0",
+        "libasound2t64 | libasound2"
+      ]
     }
   }
 }
