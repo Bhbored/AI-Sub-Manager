@@ -45,7 +45,38 @@ export type ProviderStatus = UsageSnapshot | {
 };
 
 export type StatusLine = 'pending' | 'ok' | 'set' | 'updated' | 'foreign' | 'no-node' | 'error';
-export type Page = 'dashboard' | 'settings';
+export type Page = 'dashboard' | 'settings' | 'explore';
+
+export interface InventoryProject {
+  name: string;
+  /** Working directory recorded in the sessions, when it could be read. */
+  path: string | null;
+  /** Folder that stores this project's sessions. */
+  folder: string;
+  sessions: number;
+  archived: number;
+  bytes: number;
+  created: string | null;
+  updated: string | null;
+}
+export interface InventorySkill { name: string; description: string; source: string; path: string }
+export interface InventoryPlugin { name: string; version: string | null; enabled: boolean | null; source: string }
+/** Only the launcher name or URL without credentials is kept; arguments and environment values are never read. */
+export interface InventoryMcp { name: string; transport: string; target: string; source: string; enabled: boolean | null }
+export interface InventoryFile { label: string; path: string; bytes: number; modified: string | null }
+export interface Inventory {
+  provider: ProviderId;
+  home: string;
+  scannedAt: string;
+  projects: InventoryProject[];
+  skills: InventorySkill[];
+  plugins: InventoryPlugin[];
+  mcpServers: InventoryMcp[];
+  files: InventoryFile[];
+  sessionCount: number;
+  sessionBytes: number;
+  warnings: string[];
+}
 
 export interface MonitorState {
   settings: Preferences;
@@ -63,6 +94,8 @@ export interface MonitorApi {
   settings(value: Preferences): Promise<void>;
   onUpdate(callback: (state: MonitorState) => void): () => void;
   onNavigate(callback: (page: Page) => void): () => void;
+  inventory(id: ProviderId): Promise<Inventory>;
+  open(path: string): Promise<void>;
   logs(): Promise<void>;
   reset(): Promise<void>;
   quit(): Promise<void>;

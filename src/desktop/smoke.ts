@@ -27,6 +27,12 @@ export async function smoke({ window, show, getState, directory }: { window: Bro
     await window.webContents.executeJavaScript("document.querySelector('[aria-label=Settings]').click()");
     await until(() => window.webContents.executeJavaScript("document.querySelector('h1')?.textContent === 'Settings'"));
     await window.webContents.executeJavaScript("document.querySelector('[aria-label=\"Back to dashboard\"]').click()");
+    await window.webContents.executeJavaScript("document.querySelector('[aria-label=Explore]').click()");
+    await until(() => window.webContents.executeJavaScript("document.querySelector('h1')?.textContent === 'Explore'"));
+    await until(() => window.webContents.executeJavaScript("document.body.innerText.includes(' sessions · ')"));
+    await window.webContents.executeJavaScript("document.querySelector('[aria-label=\"Back to dashboard\"]').click()");
+    await assert.rejects(window.webContents.executeJavaScript("window.monitor.inventory('nope')"));
+    await assert.rejects(window.webContents.executeJavaScript("window.monitor.open('relative.json')"));
     await until(() => Object.values(getState().status).every(item => !['starting', 'refreshing'].includes(item.state)));
     await window.webContents.executeJavaScript("window.monitor.refresh()");
     await assert.rejects(window.webContents.executeJavaScript("window.monitor.settings({interval: 3})"));

@@ -13,6 +13,7 @@ import { providerIds as ids, type MonitorState, type ProviderId, type StatusLine
 import { asRecord } from '../shared/validation.js';
 import { ensureStatusLine, buildCommand, settingsFile } from '../providers/claude/setup.js';
 import { smoke } from './smoke.js';
+import { scanInventory, resolveOpenable } from '../providers/inventory/index.js';
 
 const page = path.join(import.meta.dirname, '../../dist/index.html');
 const asset = (name: string) => path.join(import.meta.dirname, '../../assets', name);
@@ -187,6 +188,14 @@ function guard<Args extends unknown[], Result>(handler: (...args: Args) => Resul
 ipcMain.handle('state', guard(state));
 ipcMain.handle('settings', guard(updateSettings));
 ipcMain.handle('refresh', guard(refresh));
+ipcMain.handle('inventory', guard(async (id: unknown) => {
+  if (!ids.some(known => known === id)) throw Error('Unknown provider.');
+  return scanInventory(id as ProviderId);
+}));
+ipcMain.handle('open', guard(async (target: unknown) => {
+  const resolved = await resolveOpenable(target);
+  if (await shell.openPath(resolved)) throw Error('That item could not be opened.');
+}));
 ipcMain.handle('logs', guard(async () => {
   const directory = path.join(root, 'logs');
   fs.mkdirSync(directory, { recursive: true });

@@ -11,6 +11,20 @@ Electron's main process owns SQLite, notifications to the renderer, tray behavio
 
 To add a provider, implement a refresh function returning a normalized status and optional snapshot. Register it in the worker, extend the validated provider IDs, and add its display name and documented discovery rules.
 
+## Explore inventory
+
+The Explore page scans each provider's local folder on demand (`~/.claude` and `~/.claude.json`, or `CLAUDE_CONFIG_DIR`; `~/.codex`, or `CODEX_HOME`). It is read-only.
+
+| Item | Claude Code | Codex |
+| --- | --- | --- |
+| Projects and sessions | `projects/<project>/*.jsonl`; the project path is read from the `cwd` recorded in recent transcripts | `sessions/YYYY/MM/DD/rollout-*.jsonl` and `archived_sessions/`, grouped by recorded `cwd`; created time comes from the file name |
+| Skills | `skills/` and each installed plugin's `skills/` | `skills/` and `skills/.system/` |
+| Plugins | `plugins/installed_plugins.json` and `enabledPlugins` in `settings.json` | `[plugins."name@market"]` tables in `config.toml` |
+| MCP servers | `mcpServers` in `.claude.json` (user and per project) and plugin `.mcp.json` | `[mcp_servers.<name>]` tables in `config.toml` |
+| Configuration | `settings.json`, `settings.local.json`, `CLAUDE.md`, `.claude.json` | `config.toml`, `AGENTS.md` |
+
+Privacy rules: `.credentials.json` and `auth.json` are never read, listed or opened. For MCP servers only the name, transport, launcher program name or credential-free URL are kept; arguments, headers, environment values and URL queries are discarded. The rest of `.claude.json` (account details) is ignored. The renderer can only ask the main process to open folders, or JSON, TOML and Markdown files, inside these provider folders. Symbolic links are not followed while measuring sizes. The Codex TOML reader is deliberately minimal (table headers plus string and boolean values).
+
 References: [Codex app-server](https://learn.chatgpt.com/docs/app-server), [Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference), [Claude Code interactive mode](https://code.claude.com/docs/en/interactive-mode).
 
 ## Claude Code usage capture

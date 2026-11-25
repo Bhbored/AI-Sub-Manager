@@ -6,7 +6,7 @@ The app, tests, and Node-based release tools are written in TypeScript. The Wind
 | --- | --- |
 | `src/desktop/` | Electron startup, tray and window lifecycle, SQLite, preload bridge, and packaged smoke test. |
 | `src/worker/` | Utility process, refresh scheduling, and retry handling. |
-| `src/providers/` | Windows and POSIX CLI discovery (`windows-cli.ts`, `posix-cli.ts`, shared contract in `cli.ts`) plus separate Codex and Claude adapters. |
+| `src/providers/` | Read-only Explore scanners (`inventory/`), Windows and POSIX CLI discovery (`windows-cli.ts`, `posix-cli.ts`, shared contract in `cli.ts`) plus separate Codex and Claude adapters. |
 | `src/shared/` | IPC and worker contracts, validation, and renewal calculations. |
 | `src/ui/` | React entry point, dashboard and settings features, shared controls, and Tailwind theme. |
 | `scripts/` | Version bumps, Windows and Linux packaging (`dist.ts --platform`), and asset generation. |
