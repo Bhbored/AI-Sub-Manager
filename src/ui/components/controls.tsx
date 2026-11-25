@@ -5,11 +5,13 @@ export function Card({ className = '', ...props }: HTMLAttributes<HTMLElement>) 
 }
 
 export function Button({ className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <button type="button" className={'cursor-pointer rounded-md border border-edge bg-field px-3 py-2 text-xs text-foreground hover:border-accent disabled:cursor-default disabled:opacity-50 ' + className} {...props}/>;
+  return <button type="button" className={'inline-flex min-h-9 cursor-pointer items-center justify-center gap-2 rounded-md border border-edge bg-field px-3 py-2 text-xs leading-none text-foreground hover:border-accent disabled:cursor-default disabled:opacity-50 ' + className} {...props}/>;
 }
 
-export function IconButton({ className = '', ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {
-  return <Button className={'grid size-9 shrink-0 place-items-center p-0 text-muted hover:text-accent ' + className} {...props}/>;
+export function IconButton({ className = '', title, 'aria-label': label, ...props }: ButtonHTMLAttributes<HTMLButtonElement> & { 'aria-label': string }) {
+  return <button type="button" aria-label={label} title={title ?? label}
+    className={'grid size-9 shrink-0 cursor-pointer place-items-center rounded-md border border-edge bg-field p-0 text-muted hover:border-accent hover:text-accent focus-visible:outline-offset-0 disabled:cursor-default disabled:opacity-50 [&>svg]:block [&>svg]:shrink-0 ' + className}
+    {...props}/>;
 }
 
 export function Field({ title, children }: { title: string; children: ReactNode }) {

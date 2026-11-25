@@ -23,3 +23,9 @@ In Settings, enter your renewal dates, choose a refresh interval, and configure 
 - [Application versioning and release bumps](docs/versioning.md)
 
 - [TypeScript source layout](docs/source-layout.md)
+
+## Window modes
+
+Use the pin button to open the desktop widget. It shows each provider's 5-hour and weekly limits, reset times, and renewal date when available. Compact and widget modes are remembered between launches.
+
+Use the full-screen button or **F11** to expand the dashboard and **Esc** to return to compact mode. The tray menu also offers all three modes. On Windows and Linux under X11, the widget opens at the top-right of the current display's usable area and stays above regular windows. On Wayland the widget view is available, while the compositor controls placement and pinning. Use your desktop's window menu or rules if it offers those options.

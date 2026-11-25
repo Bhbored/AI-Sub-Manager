@@ -46,6 +46,8 @@ export type ProviderStatus = UsageSnapshot | {
 
 export type StatusLine = 'pending' | 'ok' | 'set' | 'updated' | 'foreign' | 'no-node' | 'error';
 export type Page = 'dashboard' | 'settings' | 'explore';
+export const windowModes = ['compact', 'fullscreen', 'widget'] as const;
+export type WindowMode = (typeof windowModes)[number];
 
 export interface InventoryProject {
   name: string;
@@ -86,6 +88,7 @@ export interface MonitorState {
   statusLine: StatusLine;
   worker: boolean;
   version: string;
+  view: { mode: WindowMode; cornerPinAvailable: boolean };
 }
 
 export interface MonitorApi {
@@ -94,6 +97,9 @@ export interface MonitorApi {
   settings(value: Preferences): Promise<void>;
   onUpdate(callback: (state: MonitorState) => void): () => void;
   onNavigate(callback: (page: Page) => void): () => void;
+  setWindowMode(mode: WindowMode): Promise<void>;
+  minimize(): Promise<void>;
+  closeWindow(): Promise<void>;
   inventory(id: ProviderId): Promise<Inventory>;
   open(path: string): Promise<void>;
   logs(): Promise<void>;

@@ -1,5 +1,5 @@
-import { app, BrowserWindow, Tray, Menu, ipcMain, utilityProcess, powerMonitor, shell, dialog, Notification } from 'electron';
-import type { IpcMainInvokeEvent, UtilityProcess } from 'electron';
+import { app, BrowserWindow, Tray, Menu, ipcMain, utilityProcess, powerMonitor, shell, dialog, Notification, screen } from 'electron';
+import type { IpcMainInvokeEvent, Rectangle, UtilityProcess } from 'electron';
 import path from 'node:path';
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
@@ -9,11 +9,12 @@ import { setAutostart } from './autostart.js';
 import { nextRenewal } from '../shared/renewal.js';
 import { openStore } from './storage.js';
 import { normalize, defaults } from '../shared/preferences.js';
-import { providerIds as ids, type MonitorState, type ProviderId, type StatusLine, type WorkerEvent, type WorkerRequest } from '../shared/contracts.js';
+import { providerIds as ids, windowModes, type MonitorState, type ProviderId, type StatusLine, type WindowMode, type WorkerEvent, type WorkerRequest } from '../shared/contracts.js';
 import { asRecord } from '../shared/validation.js';
 import { ensureStatusLine, buildCommand, settingsFile } from '../providers/claude/setup.js';
 import { smoke } from './smoke.js';
 import { scanInventory, resolveOpenable } from '../providers/inventory/index.js';
+import { layoutBounds, supportsCornerPin } from './window-layout.js';
 
 const page = path.join(import.meta.dirname, '../../dist/index.html');
 const asset = (name: string) => path.join(import.meta.dirname, '../../assets', name);
@@ -35,9 +36,14 @@ const status: MonitorState['status'] = { codex: { state: 'starting' }, claude: {
 const cached: MonitorState['cached'] = {};
 let storageError = '';
 let statusLine: StatusLine = 'pending';
+let mode: WindowMode = 'compact';
+let compactBounds: Rectangle | undefined;
+let targetDisplay: number | undefined;
+const displaySession = process.env.XDG_SESSION_TYPE || (process.env.WAYLAND_DISPLAY ? 'wayland' : undefined);
+const cornerPinAvailable = supportsCornerPin(process.platform, displaySession, app.commandLine.getSwitchValue('ozone-platform'));
 const state = (): MonitorState => ({
   settings, status, cached, storageError, statusLine,
-  worker: Boolean(worker), version: app.getVersion()
+  worker: Boolean(worker), version: app.getVersion(), view: { mode, cornerPinAvailable }
 });
 const emit = () => {
   if (window && !window.isDestroyed()) window.webContents.send('update', state());
@@ -75,22 +81,87 @@ function show() {
   current.show();
   current.focus();
 }
+function displayFor(current?: BrowserWindow) {
+  return screen.getAllDisplays().find(display => display.id === targetDisplay) ??
+    (current && cornerPinAvailable ? screen.getDisplayMatching(current.getNormalBounds()) : screen.getPrimaryDisplay());
+}
+function applyWindowLayout(current: BrowserWindow) {
+  if (mode === 'fullscreen') return;
+  const display = displayFor(current);
+  const bounds = layoutBounds(mode, display.workArea, compactBounds);
+  if (cornerPinAvailable) {
+    current.setAlwaysOnTop(mode === 'widget');
+    current.setBounds(bounds);
+  } else {
+    current.setSize(bounds.width, bounds.height);
+  }
+}
+function setWindowMode(value: unknown) {
+  const next = windowModes.find(option => option === value);
+  if (!next) throw Error('Invalid window mode.');
+  if (mode === next) return;
+  const current = window;
+  if (current && mode === 'compact') {
+    compactBounds = current.getNormalBounds();
+    targetDisplay = (cornerPinAvailable ? screen.getDisplayMatching(compactBounds) : screen.getPrimaryDisplay()).id;
+  }
+  const wasFullscreen = mode === 'fullscreen';
+  mode = next;
+  if (current) {
+    if (next === 'fullscreen') {
+      if (cornerPinAvailable) current.setAlwaysOnTop(false);
+      current.setFullScreen(true);
+    } else if (wasFullscreen) {
+      current.setFullScreen(false);
+    } else {
+      applyWindowLayout(current);
+    }
+  }
+  if (next !== 'fullscreen') {
+    try { store?.write('window-mode', next); }
+    catch { log('window.mode.save.failed'); }
+  }
+  menu();
+  emit();
+}
+function openPage(destination: 'dashboard' | 'settings') {
+  show();
+  if (mode === 'widget') setWindowMode('compact');
+  window?.webContents.send('navigate', destination);
+}
 function createWindow() {
+  const bounds = layoutBounds(mode === 'widget' ? 'widget' : 'compact', displayFor().workArea, compactBounds);
   const current = window = new BrowserWindow({
-    show: false, width: 390, height: 680, resizable: false, maximizable: false,
-    fullscreenable: false, autoHideMenuBar: true, backgroundColor: '#080d13',
+    show: false, ...bounds, frame: false, resizable: false, maximizable: false,
+    fullscreenable: true, autoHideMenuBar: true, backgroundColor: '#080d13',
     icon: asset(process.platform === 'win32' ? 'icon.ico' : 'icon.png'), webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'), contextIsolation: true,
       nodeIntegration: false, sandbox: true
     }
   });
+  applyWindowLayout(current);
   window.removeMenu();
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
+  current.webContents.on('before-input-event', (event, input) => {
+    if (input.type !== 'keyDown' || input.isAutoRepeat) return;
+    if (input.key === 'F11' || (input.key === 'Escape' && mode === 'fullscreen')) {
+      event.preventDefault();
+      setWindowMode(mode === 'fullscreen' ? 'compact' : 'fullscreen');
+    }
+  });
+  current.on('leave-full-screen', () => {
+    if (mode === 'fullscreen') setWindowMode('compact');
+    applyWindowLayout(current);
+  });
   window.webContents.session.setPermissionRequestHandler((_contents, _permission, respond) => respond(false));
   window.on('close', event => {
     if (closing) return;
-    if (settings.closeToTray) { event.preventDefault(); current.hide(); }
+    if (settings.closeToTray && tray) {
+      event.preventDefault();
+      if (mode === 'fullscreen') setWindowMode('compact');
+      current.hide();
+    }
     else app.quit();
   });
   window.on('closed', () => { window = null; });
@@ -102,10 +173,14 @@ function refresh() { send({ type: 'refresh' }); }
 function menu() {
   tray?.setContextMenu(Menu.buildFromTemplate([
     { label: 'AI Usage Monitor', enabled: false }, { type: 'separator' },
-    { label: 'Open Dashboard', click: show }, { label: 'Refresh Now', click: refresh },
+    { label: 'Open Dashboard', click: () => openPage('dashboard') }, { label: 'Refresh Now', click: refresh },
+    { label: 'Window mode', submenu: windowModes.map((choice, index) => ({
+      label: ['Compact', 'Full screen', 'Desktop widget'][index], type: 'radio',
+      checked: choice === mode, click: () => { show(); setWindowMode(choice); }
+    })) },
     { type: 'separator' },
     { label: settings.paused ? 'Resume Monitoring' : 'Pause Monitoring', click: () => updateSettings({ ...settings, paused: !settings.paused }) },
-    { label: 'Settings', click: () => { show(); window?.webContents.send('navigate', 'settings'); } },
+    { label: 'Settings', click: () => openPage('settings') },
     { type: 'separator' }, { label: 'Quit', click: () => app.quit() }
   ]));
 }
@@ -188,6 +263,9 @@ function guard<Args extends unknown[], Result>(handler: (...args: Args) => Resul
 ipcMain.handle('state', guard(state));
 ipcMain.handle('settings', guard(updateSettings));
 ipcMain.handle('refresh', guard(refresh));
+ipcMain.handle('window:mode', guard(setWindowMode));
+ipcMain.handle('window:minimize', guard(() => window?.minimize()));
+ipcMain.handle('window:close', guard(() => window?.close()));
 ipcMain.handle('inventory', guard(async (id: unknown) => {
   if (!ids.some(known => known === id)) throw Error('Unknown provider.');
   return scanInventory(id as ProviderId);
@@ -224,17 +302,23 @@ else {
     try {
       store = openStore(path.join(root, 'database'));
       settings = normalize({ ...defaults(), ...asRecord(store.read('settings')) });
+      if (store.read('window-mode') === 'widget') mode = 'widget';
       for (const id of ids) cached[id] = store.latest(id);
     } catch { storageError = 'The local database is unavailable. Changes may not survive a restart.'; }
     log('app.start');
     setupStatusLine();
     const current = createWindow();
-    tray = new Tray(asset('tray-icon.png'));
-    tray.setToolTip('AI Usage Monitor');
-    if (process.platform === 'linux') tray.on('click', show);
-    else tray.on('double-click', show);
+    try {
+      tray = new Tray(asset('tray-icon.png'));
+      tray.setToolTip('AI Usage Monitor');
+      if (process.platform === 'linux') tray.on('click', show);
+      else tray.on('double-click', show);
+    } catch { log('tray.unavailable'); }
     menu();
-    if (!settings.startMinimized || !process.argv.includes('--startup')) current.once('ready-to-show', show);
+    if (!tray || !settings.startMinimized || !process.argv.includes('--startup')) current.once('ready-to-show', show);
+    const repositionWidget = () => { if (window && mode === 'widget') applyWindowLayout(window); };
+    screen.on('display-metrics-changed', repositionWidget);
+    screen.on('display-removed', repositionWidget);
     powerMonitor.on('resume', () => { send({ type: 'resume' }); checkRenewals(); });
     setInterval(checkRenewals, 60000).unref();
     checkRenewals();

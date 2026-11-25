@@ -39,31 +39,33 @@ export function Settings({ data, onSave, onLogs, onReset, onQuit }: Props) {
   const { settings } = data;
   const update = (patch: Partial<Preferences>) => onSave({ ...settings, ...patch });
   return <>
-    <h1 className="text-[25px] font-semibold tracking-tight">Settings</h1>
-    <Card className="space-y-3">
-      <h2 className={heading}>Monitoring</h2>
-      <Field title="Refresh interval">
-        <select className={fieldStyle} value={settings.interval} onChange={event => {
-          const interval = intervals.find(option => option === Number(event.target.value));
-          if (interval !== undefined) update({ interval });
-        }}>
-          {intervals.map(option => <option key={option} value={option}>{option ? option + ' minutes' : 'Manual only'}</option>)}
-        </select>
-      </Field>
-      <Toggle title="Pause automatic refresh" checked={settings.paused} onChange={paused => update({ paused })}/>
-      {providerIds.map(id => <Toggle key={id} title={'Monitor ' + providerNames[id]} checked={!settings.disabled[id]} onChange={enabled => update({ disabled: { ...settings.disabled, [id]: !enabled } })}/>)}
-    </Card>
-    <Card className="space-y-3">
-      <h2 className={heading}>System</h2>
-      {systemSettings.map(([key, label]) => <Toggle key={key} title={label} checked={settings[key]} onChange={value => update({ [key]: value })}/>)}
-    </Card>
-    {providerIds.map(id => <SubscriptionForm key={id + JSON.stringify(settings.subscriptions[id])} id={id} saved={settings.subscriptions[id]} save={entry => update({ subscriptions: { ...settings.subscriptions, [id]: entry } })}/>)}
-    <Card className="space-y-2">
-      <h2 className={heading}>Diagnostics</h2>
-      <p className="text-xs text-muted">Background worker {data.worker ? 'active' : 'offline'}</p>
-      <div className="flex flex-wrap gap-2"><Button onClick={onLogs}>Open logs</Button><Button onClick={onReset}>Reset preferences</Button></div>
-    </Card>
-    <Card className="space-y-2"><h2 className={heading}>AI Usage Monitor {data.version}</h2><p className="text-xs leading-relaxed text-muted">Independent subscription monitoring through the CLIs on your Windows PATH. Manage accounts in the provider CLIs.</p></Card>
+    <h1 className="mb-5 text-[26px] font-semibold tracking-tight md:text-3xl">Settings</h1>
+    <div className="md:grid md:grid-cols-2 md:items-start md:gap-x-5">
+      <Card className="space-y-3">
+        <h2 className={heading}>Monitoring</h2>
+        <Field title="Refresh interval">
+          <select className={fieldStyle} value={settings.interval} onChange={event => {
+            const interval = intervals.find(option => option === Number(event.target.value));
+            if (interval !== undefined) update({ interval });
+          }}>
+            {intervals.map(option => <option key={option} value={option}>{option ? option + ' minutes' : 'Manual only'}</option>)}
+          </select>
+        </Field>
+        <Toggle title="Pause automatic refresh" checked={settings.paused} onChange={paused => update({ paused })}/>
+        {providerIds.map(id => <Toggle key={id} title={'Monitor ' + providerNames[id]} checked={!settings.disabled[id]} onChange={enabled => update({ disabled: { ...settings.disabled, [id]: !enabled } })}/>)}
+      </Card>
+      <Card className="space-y-3">
+        <h2 className={heading}>System</h2>
+        {systemSettings.map(([key, label]) => <Toggle key={key} title={label} checked={settings[key]} onChange={value => update({ [key]: value })}/>)}
+      </Card>
+      {providerIds.map(id => <SubscriptionForm key={id + JSON.stringify(settings.subscriptions[id])} id={id} saved={settings.subscriptions[id]} save={entry => update({ subscriptions: { ...settings.subscriptions, [id]: entry } })}/>)}
+      <Card className="space-y-2">
+        <h2 className={heading}>Diagnostics</h2>
+        <p className="text-xs text-muted">Background worker {data.worker ? 'active' : 'offline'}</p>
+        <div className="flex flex-wrap gap-2"><Button onClick={onLogs}>Open logs</Button><Button onClick={onReset}>Reset preferences</Button></div>
+      </Card>
+      <Card className="space-y-2"><h2 className={heading}>AI Usage Monitor {data.version}</h2><p className="text-xs leading-relaxed text-muted">Independent subscription monitoring through your installed CLIs. Manage accounts in the provider CLIs.</p></Card>
+    </div>
     <Button onClick={onQuit}>Quit application</Button>
   </>;
 }

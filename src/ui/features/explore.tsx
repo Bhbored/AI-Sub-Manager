@@ -43,7 +43,7 @@ export function Explore({ onOpen, onError }: { onOpen(path: string): void; onErr
   useEffect(() => {
     let active = true;
     setLoading(true);
-    window.monitor.inventory(provider).then(value => { if (active) setData(value); }, onError)
+    window.monitor.inventory(provider).then(value => { if (active) setData(value); }, failure => { if (active) onError(failure); })
       .finally(() => { if (active) setLoading(false); });
     return () => { active = false; };
   }, [provider, scan]);
@@ -54,15 +54,15 @@ export function Explore({ onOpen, onError }: { onOpen(path: string): void; onErr
   const folder = (path: string, label: string) => <IconButton aria-label={label} title={label} onClick={() => onOpen(path)}><FolderOpen size={16}/></IconButton>;
 
   return <>
-    <h1 className="mb-4 text-[25px] font-semibold tracking-tight">Explore</h1>
-    <div className="flex items-center gap-2" role="tablist" aria-label="Provider">
-      {providerIds.map(id => <Button key={id} role="tab" aria-selected={provider === id} className={provider === id ? 'border-accent text-accent' : ''}
+    <h1 className="mb-5 text-[26px] font-semibold tracking-tight md:text-3xl">Explore</h1>
+    <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Provider">
+      {providerIds.map(id => <Button key={id} aria-pressed={provider === id} className={provider === id ? 'border-accent text-accent' : ''}
         onClick={() => { setProvider(id); setAll(false); }}>{providerNames[id]}</Button>)}
       <IconButton aria-label="Rescan" title="Rescan" disabled={loading} className="ml-auto" onClick={() => setScan(value => value + 1)}>
-        <RefreshCw size={16} className={loading ? 'animate-spin' : ''}/>
+        <RefreshCw size={16} className={loading ? 'motion-safe:animate-spin' : ''}/>
       </IconButton>
     </div>
-    {!current ? <p className="mt-4 text-xs text-muted">{loading ? 'Scanning…' : 'Nothing to show.'}</p> : <>
+    {!current ? <p role="status" className="mt-4 text-xs text-muted">{loading ? 'Scanning…' : 'Nothing to show.'}</p> : <>
       <Card className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-sm font-semibold">{current.sessionCount} sessions · {formatBytes(current.sessionBytes)}</p>
@@ -72,39 +72,43 @@ export function Explore({ onOpen, onError }: { onOpen(path: string): void; onErr
       </Card>
       {current.warnings.map(warning => <p key={warning} className="text-xs text-warning">{warning}</p>)}
 
-      <Section title="Projects" count={projects.length}>
-        <label className="flex items-center gap-2 text-[11px] text-muted">Sort by
-          <select value={sort} onChange={event => setSort(event.target.value as Sort)} className="rounded-md border border-edge bg-field px-2 py-1 text-xs text-foreground">
-            <option value="recent">Last active</option><option value="size">Size</option><option value="sessions">Sessions</option>
-          </select>
-        </label>
-        {shown.map(project => <Row key={project.folder + project.path} title={project.name}
-          detail={project.path ?? project.folder}
-          meta={project.sessions + ' sessions' + (project.archived ? ' (' + project.archived + ' archived)' : '') + ' · ' + formatBytes(project.bytes) + ' · created ' + day(project.created) + ' · active ' + day(project.updated)}
-          action={folder(project.folder, 'Open sessions folder for ' + project.name)}/>)}
-        {projects.length > 8 && <Button onClick={() => setAll(value => !value)}>{all ? 'Show fewer' : 'Show all ' + projects.length}</Button>}
-      </Section>
+      <div className="grid md:grid-cols-[minmax(0,3fr)_minmax(0,2fr)] md:items-start md:gap-5">
+        <Section title="Projects" count={projects.length}>
+          <label className="flex items-center gap-2 text-[11px] text-muted">Sort by
+            <select value={sort} onChange={event => setSort(event.target.value as Sort)} className="rounded-md border border-edge bg-field px-2 py-1 text-xs text-foreground">
+              <option value="recent">Last active</option><option value="size">Size</option><option value="sessions">Sessions</option>
+            </select>
+          </label>
+          {shown.map(project => <Row key={project.folder + project.path} title={project.name}
+            detail={project.path ?? project.folder}
+            meta={project.sessions + ' sessions' + (project.archived ? ' (' + project.archived + ' archived)' : '') + ' · ' + formatBytes(project.bytes) + ' · created ' + day(project.created) + ' · active ' + day(project.updated)}
+            action={folder(project.folder, 'Open sessions folder for ' + project.name)}/>)}
+          {projects.length > 8 && <Button onClick={() => setAll(value => !value)}>{all ? 'Show fewer' : 'Show all ' + projects.length}</Button>}
+        </Section>
 
-      <Section title="MCP servers" count={current.mcpServers.length}>
-        {current.mcpServers.map((server, index) => <Row key={server.name + server.source + index} title={server.name}
-          detail={server.transport + (server.target ? ' · ' + server.target : '')}
-          meta={server.source + (server.enabled === false ? ' · disabled' : '')}/>)}
-      </Section>
+        <div className="min-w-0">
+          <Section title="MCP servers" count={current.mcpServers.length}>
+            {current.mcpServers.map((server, index) => <Row key={server.name + server.source + index} title={server.name}
+              detail={server.transport + (server.target ? ' · ' + server.target : '')}
+              meta={server.source + (server.enabled === false ? ' · disabled' : '')}/>)}
+          </Section>
 
-      <Section title="Skills" count={current.skills.length}>
-        {current.skills.map(skill => <Row key={skill.path} title={skill.name} detail={skill.description} meta={skill.source}
-          action={folder(skill.path, 'Open skill folder ' + skill.name)}/>)}
-      </Section>
+          <Section title="Skills" count={current.skills.length}>
+            {current.skills.map(skill => <Row key={skill.path} title={skill.name} detail={skill.description} meta={skill.source}
+              action={folder(skill.path, 'Open skill folder ' + skill.name)}/>)}
+          </Section>
 
-      <Section title="Plugins" count={current.plugins.length}>
-        {current.plugins.map(plugin => <Row key={plugin.name + plugin.source} title={plugin.name + (plugin.version ? ' ' + plugin.version : '')}
-          meta={plugin.source + (plugin.enabled === null ? '' : plugin.enabled ? ' · enabled' : ' · disabled')}/>)}
-      </Section>
+          <Section title="Plugins" count={current.plugins.length}>
+            {current.plugins.map(plugin => <Row key={plugin.name + plugin.source} title={plugin.name + (plugin.version ? ' ' + plugin.version : '')}
+              meta={plugin.source + (plugin.enabled === null ? '' : plugin.enabled ? ' · enabled' : ' · disabled')}/>)}
+          </Section>
 
-      <Section title="Configuration" count={current.files.length}>
-        {current.files.map(file => <Row key={file.path} title={file.label} meta={formatBytes(file.bytes) + ' · edited ' + day(file.modified)}
-          action={<Button onClick={() => onOpen(file.path)}>Open</Button>}/>)}
-      </Section>
+          <Section title="Configuration" count={current.files.length}>
+            {current.files.map(file => <Row key={file.path} title={file.label} meta={formatBytes(file.bytes) + ' · edited ' + day(file.modified)}
+              action={<Button onClick={() => onOpen(file.path)}>Open</Button>}/>)}
+          </Section>
+        </div>
+      </div>
     </>}
   </>;
 }

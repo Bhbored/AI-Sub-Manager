@@ -2,11 +2,12 @@ import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import { accessSync, constants, readdirSync, statSync } from 'node:fs';
 import { homedir } from 'node:os';
-import { delimiter, dirname, isAbsolute, join } from 'node:path';
+import { posix } from 'node:path';
 import type { ProviderId } from '../shared/contracts.js';
 import { cliEnvironment, type Candidate, type CliInfo, type CliTool } from './cli.js';
 
 const run = promisify(execFile);
+const { delimiter, dirname, isAbsolute, join } = posix;
 type Run = (file: string, args: string[], options: Parameters<typeof run>[2]) => Promise<{ stdout: string }>;
 type Find = (name: string) => string[];
 

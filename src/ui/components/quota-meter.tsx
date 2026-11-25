@@ -1,9 +1,9 @@
 import type { QuotaWindow } from '../../shared/contracts.js';
 
-function resetLabel(value: string | null, now: number) {
-  if (!value) return 'Reset time unavailable';
+export function resetLabel(value: string | null, now: number, compact = false) {
+  if (!value) return compact ? 'Reset unknown' : 'Reset time unavailable';
   const mins = Math.ceil((Date.parse(value) - now) / 60000);
-  if (mins <= 0) return 'Reset time passed · refresh for new usage';
+  if (mins <= 0) return compact ? 'Reset passed' : 'Reset time passed · refresh for new usage';
   const days = Math.floor(mins / 1440);
   const hours = Math.floor(mins / 60) % 24;
   return 'Resets in ' + [days && days + 'd', hours && hours + 'h', mins % 60 + 'm'].filter(Boolean).join(' ');

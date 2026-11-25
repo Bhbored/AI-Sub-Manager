@@ -2,17 +2,17 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
-import { delimiter, join } from 'node:path';
+import { join, posix } from 'node:path';
 import { tmpdir } from 'node:os';
 import { findOnPath, createPosixTool } from '../src/providers/posix-cli.js';
 import { createPlatformTool } from '../src/providers/cli.js';
 import { setAutostart } from '../src/desktop/autostart.js';
 
 test('POSIX discovery ignores relative PATH entries, de-duplicates and keeps fallbacks last', () => {
-  const found = findOnPath('claude', { PATH: ['relative/bin', '/opt/tools', '/opt/tools'].join(delimiter) }, '/home/u', file => file.endsWith('claude'));
-  assert.equal(found[0], join('/opt/tools', 'claude'));
-  assert.equal(found.filter(file => file === join('/opt/tools', 'claude')).length, 1);
-  assert.ok(found.includes(join('/home/u', '.local/bin', 'claude')));
+  const found = findOnPath('claude', { PATH: 'relative/bin:/opt/tools:/opt/tools' }, '/home/u', file => file.endsWith('claude'));
+  assert.equal(found[0], '/opt/tools/claude');
+  assert.equal(found.filter(file => file === '/opt/tools/claude').length, 1);
+  assert.ok(found.includes('/home/u/.local/bin/claude'));
   assert.ok(!found.some(file => file.startsWith('relative')));
 });
 
@@ -29,7 +29,7 @@ test('POSIX tool runs the CLI directly, scrubs credentials and exposes its own f
   assert.equal(calls[0].exe, '/home/u/.nvm/versions/node/v24/bin/codex');
   assert.deepEqual(calls[0].args, ['--version']);
   assert.ok(!Object.hasOwn(calls[0].env ?? {}, 'ANTHROPIC_API_KEY'));
-  assert.ok(calls[0].env?.PATH?.startsWith('/home/u/.nvm/versions/node/v24/bin' + delimiter));
+  assert.equal(calls[0].env?.PATH?.split(posix.delimiter)[0], '/home/u/.nvm/versions/node/v24/bin');
 });
 
 test('POSIX tool reports a missing CLI and a CLI without a version', async () => {
