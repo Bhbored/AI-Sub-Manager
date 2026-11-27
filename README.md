@@ -1,31 +1,74 @@
-# AI Usage Monitor
+<p align="center">
+  <img src="assets/icon.png" width="92" height="92" alt="AI Usage Monitor app icon">
+</p>
 
-A compact Windows and Linux (Debian/Ubuntu) utility that reads subscription status through the official CLIs already on your PATH. Codex quota windows come from its documented app-server. Claude Code account status is supported. Its interactive usage display has no verified machine-readable collection method.
+<h1 align="center">AI Usage Monitor</h1>
 
-## Run
+<p align="center">Track your ChatGPT and Claude subscription limits from your desktop.</p>
 
-Install the official provider CLIs you want to monitor. In a fresh terminal, run `where.exe codex` or `where.exe claude` (Windows) or `which codex` / `which claude` (Linux) and verify the matching version command. Use `codex login` or `claude auth login` to sign in with a subscription account. If you recently changed PATH, quit the monitor from the tray and relaunch it. Signing out in a terminal affects all clients using that CLI profile.
+<p align="center">
+  Windows x64 · Linux x64 · Electron + React + TypeScript
+</p>
 
-Open the dashboard and click Refresh. The Explore page (folder-search icon) lists, for Claude Code and Codex, each project with its session count, size, and created and last-active dates, plus installed skills, plugins, MCP servers and configuration files, with buttons to open the folders and files.
+<p align="center">
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#provider-support">Provider support</a> ·
+  <a href="#development">Development</a> ·
+  <a href="https://github.com/Bhbored/AI-Sub-Manager/issues">Issues</a>
+</p>
 
-In Settings, enter your renewal dates, choose a refresh interval, and configure startup behavior. Close the window to keep the monitor running in the tray. Use Quit to stop monitoring.
+## What it does
 
-## Build and maintain
+| | Feature |
+| --- | --- |
+| 📊 | **Usage and resets.** See reported 5-hour and weekly limits, reset countdowns, and the last available reading. |
+| 📅 | **Renewal dates.** Set your own plan name, renewal date, and billing cycle in Settings. |
+| 🖥️ | **Three window modes.** Use the compact dashboard, maximize it within the desktop work area, or pin a top-right widget. |
+| 🔄 | **Background monitoring.** Refresh on demand or on a schedule. Close the window to keep monitoring from the system tray. |
+| 🗂️ | **Explore local profiles.** Browse project history and its disk usage, installed skills and plugins, MCP servers, and provider configuration. |
 
-- `npm ci` installs development dependencies. Use Node.js 24.
-- `npm run dev` builds the renderer and launches Electron.
-- `npm test` runs protocol parsing, CLI discovery, scheduler, validation, and SQLite tests.
-- `npm run build` type-checks the source and builds Electron and the Tailwind-styled renderer.
-- `npm run dist:windows -- --x64` builds the Windows NSIS installer (run on Windows).
-- `npm run dist:linux` builds a Debian/Ubuntu `.deb` and a portable AppImage (run on Linux, or in WSL).
-- [Provider integration and architecture](docs/provider-integrations.md)
-- [Packaging, signing, and smoke testing](docs/packaging.md)
-- [Application versioning and release bumps](docs/versioning.md)
+## Getting started
 
-- [TypeScript source layout](docs/source-layout.md)
+1. Check [GitHub Releases](https://github.com/Bhbored/AI-Sub-Manager/releases) for an installer. Build from source using the commands below if your platform has no published package.
+2. Install the official CLI for each provider you want to monitor and sign in with the command in the table below. Run the CLI's `--version` command from a fresh terminal to confirm it is available.
+3. Open the dashboard and select **Refresh**. Set your refresh interval, subscription renewal dates, and launch preferences in **Settings**.
 
-## Window modes
+If a CLI is missing from the dashboard, check `where.exe codex` or `where.exe claude` on Windows, or `command -v codex` or `command -v claude` on Linux. After changing PATH, choose **Quit** in the tray menu and reopen the app. The Windows app needs the Windows CLI, even if you also use a copy inside WSL.
 
-Use the pin button to open the desktop widget. It shows each provider's 5-hour and weekly limits, reset times, and renewal date when available. Compact and widget modes are remembered between launches.
+## Provider support
 
-Use **Maximize window** or **F11** to expand the app while keeping your taskbar or desktop panel visible. Use **Restore compact view** or **Esc** to return to the prior position. The tray menu also offers all three modes. The widget stays above regular windows in the top-right corner of the primary display, inside the taskbar or panel margins. On Linux, AI Usage Monitor uses XWayland when available so it can hold that position. Native Wayland sessions without XWayland, or explicitly launched with `--ozone-platform=wayland`, leave placement and pinning to the desktop compositor.
+| Provider | Sign in | Usage source |
+| --- | --- | --- |
+| <img src="assets/providers/codex.png" width="20" height="20" alt=""> **OpenAI Codex** | `codex login` | Subscription windows reported by the Codex app-server. |
+| <img src="assets/providers/claude.png" width="20" height="20" alt=""> **Claude Code** | `claude auth login` | The Claude Code status line reports usage after the first response in a subscriber session. The collector needs `node` on PATH. |
+
+The monitor uses your existing CLI profiles. Preferences and cached readings stay in local SQLite storage. Claude Code keeps an existing custom status line, and you can wire the collector into it manually. [Provider setup and architecture](docs/provider-integrations.md)
+
+### Desktop behavior
+
+Use **F11** to expand the dashboard and **Esc** to restore the compact window. The pin button switches to the widget. On Linux with native Wayland, the compositor controls widget placement. GNOME may require an AppIndicator extension to show the tray icon. [Linux desktop details](docs/packaging.md#linux-debian-and-ubuntu)
+
+## Development
+
+Use Node.js 24 and npm.
+
+```bash
+git clone https://github.com/Bhbored/AI-Sub-Manager.git
+cd AI-Sub-Manager
+npm ci
+npm run dev
+```
+
+| Command | Purpose |
+| --- | --- |
+| `npm run typecheck` | Check the desktop, renderer, test, and release tool types. |
+| `npm test` | Run the automated test suite. |
+| `npm run build` | Compile Electron and build the renderer. |
+| `npm run dist:windows -- --x64` | Build a per-user NSIS installer under `release/`. Run on Windows. |
+| `npm run dist:linux` | Build a Debian/Ubuntu `.deb` and portable AppImage under `release/linux/`. Run on Linux or WSL. |
+
+Packaging also writes release notes and SHA-256 checksums. [Packaging, signing, and smoke tests](docs/packaging.md) · [Versioning](docs/versioning.md) · [Source layout](docs/source-layout.md)
+
+## Contributing
+
+Open an issue with your OS, app version, provider CLI version, and steps to reproduce. Keep credentials and private conversation history out of reports. For a pull request, describe the change and how you tested it.
