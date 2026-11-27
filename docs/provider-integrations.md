@@ -13,17 +13,19 @@ To add a provider, implement a refresh function returning a normalized status an
 
 ## Explore inventory
 
-The Explore page scans each provider's local folder on demand (`~/.claude` and `~/.claude.json`, or `CLAUDE_CONFIG_DIR`; `~/.codex`, or `CODEX_HOME`). It is read-only.
+The Explore page inspects each provider's local profile on demand. Codex is selected first. Choose Projects, MCP, Skills, Plugins, or Configuration to manage that provider's local data. The editor writes only when you select **Save** or press **Ctrl+S**. **Revert** restores the last loaded or saved version, and **Reload from disk** reads external changes.
 
 | Item | Claude Code | Codex |
 | --- | --- | --- |
 | Projects and sessions | `projects/<project>/*.jsonl`; the project path is read from the `cwd` recorded in recent transcripts | `sessions/YYYY/MM/DD/rollout-*.jsonl` and `archived_sessions/`, grouped by recorded `cwd`; created time comes from the file name |
-| Skills | `skills/` and each installed plugin's `skills/` | `skills/` and `skills/.system/` |
-| Plugins | `plugins/installed_plugins.json` and `enabledPlugins` in `settings.json` | `[plugins."name@market"]` tables in `config.toml` |
+| Skills | Personal `skills/` and installed plugin skills | `~/.agents/skills`, profile `skills/`, and discovered bundled and plugin skills |
+| Plugins | Provider CLI inventory and user-scope uninstall | Provider CLI inventory and uninstall |
 | MCP servers | `mcpServers` in `.claude.json` (user and per project) and plugin `.mcp.json` | `[mcp_servers.<name>]` tables in `config.toml` |
-| Configuration | `settings.json`, `settings.local.json`, `CLAUDE.md`, `.claude.json` | `config.toml`, `AGENTS.md` |
+| Configuration | `settings.json`, `settings.local.json`, `CLAUDE.md` | `config.toml`, `AGENTS.md` |
 
-Privacy rules: `.credentials.json` and `auth.json` are never read, listed or opened. For MCP servers only the name, transport, launcher program name or credential-free URL are kept; arguments, headers, environment values and URL queries are discarded. The rest of `.claude.json` (account details) is ignored. The renderer can only ask the main process to open folders, or JSON, TOML and Markdown files, inside these provider folders. Symbolic links are not followed while measuring sizes. The Codex TOML reader is deliberately minimal (table headers plus string and boolean values).
+Delete history permanently removes the selected provider's local history and recalculates the tracked bytes. It preserves source files and Claude project settings. Codex deletion needs a CLI that can verify all related sessions and refuses active or cross-project sessions. Personal skills move to the system trash. Plugin uninstall uses the provider CLI. Claude removes the plugin's persistent data when its last installation is uninstalled.
+
+Credential files stay outside Explore. The MCP inventory shows redacted summaries. The editor displays the selected user configuration on request, so it may include secrets stored in that file. For Claude, only the user-level `mcpServers` object reaches the editor. The rest of `.claude.json` stays in the main process. Editor contents are not logged or stored by the monitor. Linked files and folders cannot be edited or removed through Explore.
 
 References: [Codex app-server](https://learn.chatgpt.com/docs/app-server), [Claude Code CLI reference](https://code.claude.com/docs/en/cli-reference), [Claude Code interactive mode](https://code.claude.com/docs/en/interactive-mode).
 

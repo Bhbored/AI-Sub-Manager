@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { Activity, FolderSearch, Settings as SettingsIcon } from 'lucide-react';
 import type { MonitorApi, MonitorState, Page, WindowMode } from '../shared/contracts.js';
 import { WindowBar } from './components/window-bar.js';
+import { ExploreConfirmationHost } from './components/explore-confirmation-dialog.js';
 import { Dashboard } from './features/dashboard.js';
 import { Settings } from './features/settings.js';
 import { Explore } from './features/explore.js';
@@ -28,6 +29,20 @@ function App() {
   const [page, setPage] = useState<Page>('dashboard');
   const [error, setError] = useState('');
   const [now, setNow] = useState(Date.now);
+  const [exploreDirty, setExploreDirty] = useState(false);
+  const navigate = useCallback((destination: Page) => {
+    if (destination === page) return;
+    if (exploreDirty && !window.confirm('Discard unsaved Explore changes?')) return;
+    setPage(destination);
+  }, [exploreDirty, page]);
+
+  useEffect(() => window.monitor.onNavigate(navigate), [navigate]);
+  useEffect(() => {
+    if (!exploreDirty) return;
+    const block = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', block);
+    return () => window.removeEventListener('beforeunload', block);
+  }, [exploreDirty]);
   const run = async (action: () => Promise<void>) => {
     setError('');
     try { await action(); }
@@ -41,14 +56,13 @@ function App() {
       updated = true;
       setData(state);
     });
-    const unnav = window.monitor.onNavigate(setPage);
     void window.monitor.state().then(state => {
       if (active && !updated) setData(state);
     }, failure => {
       if (active) setError(formatError(failure));
     });
     const clock = setInterval(() => setNow(Date.now()), 15000);
-    return () => { active = false; unsubscribe(); unnav(); clearInterval(clock); };
+    return () => { active = false; unsubscribe(); clearInterval(clock); };
   }, []);
 
   const home = page === 'dashboard';
@@ -56,7 +70,6 @@ function App() {
   const widget = mode === 'widget';
   const dashboardWidth = mode === 'expanded' ? 'max-w-[100rem]' : 'max-w-6xl';
   const changeMode = (next: WindowMode) => {
-    if (next === 'widget' || widget) setPage('dashboard');
     void run(() => window.monitor.setWindowMode(next));
   };
   const refresh = () => void run(window.monitor.refresh);
@@ -68,7 +81,7 @@ function App() {
       <div className={`mx-auto flex gap-1 px-4 md:px-8 ${dashboardWidth}`}>
         {navigation.map(({ page: destination, label, icon: Icon }) => <button key={destination} type="button"
           aria-label={label} aria-current={page === destination ? 'page' : undefined}
-          onClick={() => setPage(destination)}
+          onClick={() => navigate(destination)}
           className={'inline-flex min-h-11 cursor-pointer items-center gap-2 border-b-2 px-3 text-xs font-medium ' +
             (page === destination ? 'border-accent text-accent' : 'border-transparent text-muted hover:text-foreground')}>
           <Icon size={15} className="block shrink-0"/>{label}
@@ -80,11 +93,14 @@ function App() {
       {!data ? <p className="text-xs text-muted">Starting monitor…</p> : widget
         ? <Widget data={data} now={now} onRefresh={refresh}/>
         : home ? <Dashboard data={data} now={now} onRefresh={refresh}/>
-        : page === 'explore'
-        ? <Explore onOpen={path => void run(() => window.monitor.open(path))} onError={failure => setError(formatError(failure))}/>
-        : <Settings data={data} onSave={settings => void run(() => window.monitor.settings(settings))}
-          onLogs={() => void run(window.monitor.logs)} onReset={() => void run(window.monitor.reset)} onQuit={() => void run(window.monitor.quit)}/>}
+        : page === 'settings' ? <Settings data={data} onSave={settings => void run(() => window.monitor.settings(settings))}
+          onLogs={() => void run(window.monitor.logs)} onReset={() => void run(window.monitor.reset)} onQuit={() => void run(window.monitor.quit)}/> : null}
+      {data && page === 'explore' && <div hidden={widget}>
+        <Explore onDirty={setExploreDirty} onOpen={path => void run(() => window.monitor.open(path))}
+          onError={failure => setError(formatError(failure))}/>
+      </div>}
     </main>
+    <ExploreConfirmationHost onError={failure => setError(formatError(failure))}/>
   </>;
 }
 const root = document.getElementById('root');

@@ -4,16 +4,18 @@ import path from 'node:path';
 import fs from 'node:fs';
 import { pathToFileURL } from 'node:url';
 import { execFileSync } from 'node:child_process';
+import { randomUUID } from 'node:crypto';
 import { findOnPath } from '../providers/posix-cli.js';
 import { setAutostart } from './autostart.js';
 import { nextRenewal } from '../shared/renewal.js';
 import { openStore } from './storage.js';
 import { normalize, defaults } from '../shared/preferences.js';
-import { providerIds as ids, windowModes, type MonitorState, type ProviderId, type StatusLine, type WindowMode, type WorkerEvent, type WorkerRequest } from '../shared/contracts.js';
+import { providerIds as ids, windowModes, type ExploreConfirmation, type MonitorState, type ProviderId, type StatusLine, type WindowMode, type WorkerEvent, type WorkerRequest } from '../shared/contracts.js';
 import { asRecord } from '../shared/validation.js';
 import { ensureStatusLine, buildCommand, settingsFile } from '../providers/claude/setup.js';
-import { smoke } from './smoke.js';
-import { scanInventory, resolveOpenable } from '../providers/inventory/index.js';
+import { prepareExploreSmoke, smoke } from './smoke.js';
+import { resolveOpenable } from '../providers/inventory/index.js';
+import { ExploreService } from '../providers/inventory/explore.js';
 import { layoutBounds, supportsCornerPin, useXWaylandForPinning } from './window-layout.js';
 
 const page = path.join(import.meta.dirname, '../../dist/index.html');
@@ -29,6 +31,8 @@ let tray: Tray | undefined;
 let worker: UtilityProcess | null = null;
 let store: ReturnType<typeof openStore> | null = null;
 let root: string;
+let explore: ExploreService;
+let exploreConfirmation: { id: string; resolve(confirmed: boolean): void } | undefined;
 let closing = false;
 let attempts = 0;
 let settings = defaults();
@@ -161,12 +165,25 @@ function createWindow(revealAfterLoad?: () => boolean) {
   window.removeMenu();
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
+  current.webContents.on('will-prevent-unload', event => {
+    const choice = dialog.showMessageBoxSync(current, {
+      type: 'warning', message: 'Discard unsaved Explore changes?',
+      buttons: ['Keep editing', 'Discard changes'], defaultId: 0, cancelId: 0
+    });
+    if (choice === 1) event.preventDefault();
+    else closing = false;
+  });
   current.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' || input.isAutoRepeat) return;
+    if (exploreConfirmation) return;
     if (input.key === 'F11' || (input.key === 'Escape' && mode === 'expanded')) {
       event.preventDefault();
       setWindowMode(mode === 'expanded' ? 'compact' : 'expanded');
     }
+  });
+  current.webContents.on('render-process-gone', () => resolveExploreConfirmation(false));
+  current.webContents.on('did-start-navigation', ({ isMainFrame, isSameDocument }) => {
+    if (isMainFrame && !isSameDocument) resolveExploreConfirmation(false);
   });
   current.on('maximize', () => setImmediate(() => {
     if (current.isDestroyed()) return;
@@ -202,7 +219,7 @@ function createWindow(revealAfterLoad?: () => boolean) {
     }
     else app.quit();
   });
-  window.on('closed', () => { window = null; transition = undefined; });
+  window.on('closed', () => { resolveExploreConfirmation(false); window = null; transition = undefined; });
   void current.loadFile(page).then(() => {
     if (!current.isDestroyed() && revealAfterLoad?.() && !current.isVisible()) show();
   }).catch(() => log('window.load.failed'));
@@ -300,15 +317,43 @@ function guard<Args extends unknown[], Result>(handler: (...args: Args) => Resul
     return handler(...args);
   };
 }
+function resolveExploreConfirmation(confirmed: boolean) {
+  const pending = exploreConfirmation;
+  exploreConfirmation = undefined;
+  pending?.resolve(confirmed);
+}
+
+function requestExploreConfirmation(owner: BrowserWindow | null, message: string, detail: string) {
+  if (!owner || owner !== window || owner.isDestroyed() || owner.webContents.isCrashed()) return Promise.resolve(false);
+  if (exploreConfirmation) throw Error('Finish the open confirmation first.');
+  return new Promise<boolean>(resolve => {
+    const request: ExploreConfirmation = { id: randomUUID(), message, detail };
+    exploreConfirmation = { id: request.id, resolve };
+    try { owner.webContents.send('explore:confirmation', request); }
+    catch { resolveExploreConfirmation(false); }
+  });
+}
 ipcMain.handle('state', guard(state));
 ipcMain.handle('settings', guard(updateSettings));
 ipcMain.handle('refresh', guard(refresh));
 ipcMain.handle('window:mode', guard(setWindowMode));
 ipcMain.handle('window:minimize', guard(() => window?.minimize()));
 ipcMain.handle('window:close', guard(() => window?.close()));
-ipcMain.handle('inventory', guard(async (id: unknown) => {
+ipcMain.handle('inventory', guard(async (id: unknown, includePlugins: unknown) => {
   if (!ids.some(known => known === id)) throw Error('Unknown provider.');
-  return scanInventory(id as ProviderId);
+  return explore.inventory(id as ProviderId, includePlugins === true);
+}));
+ipcMain.handle('explore:read', guard((provider: unknown, id: unknown) => explore.read(provider, id)));
+ipcMain.handle('explore:save', guard((provider: unknown, id: unknown, revision: unknown, draft: unknown) => explore.save(provider, id, revision, draft)));
+ipcMain.handle('explore:remove', guard((provider: unknown, id: unknown) => {
+  const owner = window;
+  return explore.remove(provider, id, (message, detail) => requestExploreConfirmation(owner, message, detail));
+}));
+ipcMain.handle('explore:answer', guard((id: unknown, confirmed: unknown) => {
+  if (!exploreConfirmation || exploreConfirmation.id !== id || typeof confirmed !== 'boolean') {
+    throw Error('This confirmation is no longer available.');
+  }
+  resolveExploreConfirmation(confirmed);
 }));
 ipcMain.handle('open', guard(async (target: unknown) => {
   const resolved = await resolveOpenable(target);
@@ -333,12 +378,16 @@ else {
   app.on('window-all-closed', () => { if (!settings.closeToTray) app.quit(); });
   app.on('before-quit', () => {
     closing = true;
+  });
+  app.on('will-quit', () => {
     worker?.kill();
     store?.close();
     store = null;
   });
   app.whenReady().then(() => {
     root = app.getPath('userData');
+    if (smokeDirectory && process.argv.includes('--monitor-smoke-explore')) prepareExploreSmoke(smokeDirectory);
+    explore = new ExploreService(root, app.getVersion(), path => shell.trashItem(path));
     try {
       store = openStore(path.join(root, 'database'));
       settings = normalize({ ...defaults(), ...asRecord(store.read('settings')) });

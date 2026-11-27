@@ -5,6 +5,67 @@ import { screen, type BrowserWindow } from 'electron';
 import type { MonitorState } from '../shared/contracts.js';
 import { layoutBounds } from './window-layout.js';
 
+export function prepareExploreSmoke(directory: string) {
+  const codexHome = path.join(directory, 'codex');
+  const claudeHome = path.join(directory, 'claude');
+  const skill = path.join(claudeHome, 'skills', 'test-skill');
+  const history = path.join(claudeHome, 'projects', 'fixture-project');
+  fs.mkdirSync(codexHome, { recursive: true });
+  fs.mkdirSync(skill, { recursive: true });
+  fs.mkdirSync(history, { recursive: true });
+  fs.writeFileSync(path.join(codexHome, 'config.toml'), '# Isolated smoke fixture\n[mcp_servers.example]\ncommand = "node"\n');
+  fs.writeFileSync(path.join(claudeHome, '.claude.json'), '{"account":"private fixture","mcpServers":{"sample":{"command":"node"}}}');
+  fs.writeFileSync(path.join(skill, 'SKILL.md'), '---\nname: test-skill\n---\n# Fixture heading\n\n<script>blocked</script>');
+  fs.writeFileSync(path.join(history, 'fixture.jsonl'), '{}\n');
+  process.env.CODEX_HOME = codexHome;
+  process.env.CLAUDE_CONFIG_DIR = claudeHome;
+}
+
+async function checkExploreEditor(window: BrowserWindow, directory: string, until: (check: () => Promise<boolean>, label: string) => Promise<void>) {
+  const run = (source: string) => window.webContents.executeJavaScript(source);
+  const clickText = (label: string) => run(`[...document.querySelectorAll('button')].find(button => button.textContent.trim() === ${JSON.stringify(label)}).click()`);
+  assert.equal(await run("document.querySelector('[aria-label=Provider] button[aria-pressed=true]').textContent.trim()"), 'OpenAI Codex');
+  await clickText('Claude Code');
+  const history = path.join(directory, 'claude', 'projects', 'fixture-project');
+  const remove = "document.querySelector('button[aria-label=\"Delete history for fixture-project\"]')";
+  await until(() => run(`Boolean(${remove} && !${remove}.disabled)`), 'history removal icon');
+  await run(`${remove}.click()`);
+  await until(() => run("document.querySelector('dialog[open]')?.textContent.includes('fixture-project') === true"), 'custom removal confirmation');
+  assert.equal(await run('document.activeElement.textContent'), 'Cancel');
+  window.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
+  await until(() => run(`!document.querySelector('dialog[open]') && document.activeElement === ${remove}`), 'Escape to cancel and restore focus');
+  assert.equal(fs.existsSync(history), true);
+  await run(`${remove}.click()`);
+  await until(() => run("Boolean(document.querySelector('dialog[open]'))"), 'reopened removal confirmation');
+  await clickText('Remove');
+  await until(() => run("document.body.innerText.includes('Claude history deleted.')"), 'confirmed removal');
+  assert.equal(fs.existsSync(history), false);
+  await clickText('MCP');
+  await until(() => run("[...document.querySelectorAll('button')].some(button => button.textContent === 'Edit user configuration' && !button.disabled)"), 'Claude MCP actions');
+  await clickText('Edit user configuration');
+  await until(() => run("document.querySelector('.cm-content')?.textContent.includes('sample') === true"), 'JSON editor');
+  assert.equal(await run("document.querySelector('.cm-content').textContent.includes('private fixture')"), false);
+  await run("document.querySelector('.cm-content').focus()");
+  await window.webContents.insertText(' ');
+  await until(() => run("document.body.innerText.includes('Unsaved changes')"), 'editor draft');
+  await clickText('Revert');
+  await until(() => run("!document.body.innerText.includes('Unsaved changes')"), 'editor revert');
+  await run("document.querySelector('.cm-content').focus()");
+  await window.webContents.insertText(' ');
+  await until(() => run("document.body.innerText.includes('Unsaved changes')"), 'editor draft before save');
+  await clickText('Save');
+  await until(() => run("!document.body.innerText.includes('Unsaved changes')"), 'editor save');
+  const saved = JSON.parse(fs.readFileSync(path.join(directory, 'claude', '.claude.json'), 'utf8'));
+  assert.equal(saved.account, 'private fixture');
+  await clickText('Close editor');
+  await clickText('Skills');
+  await until(() => run("[...document.querySelectorAll('button')].some(button => button.textContent === 'Edit SKILL.md' && !button.disabled)"), 'skill actions');
+  await clickText('Edit SKILL.md');
+  await until(() => run("[...document.querySelectorAll('h1')].some(node => node.textContent === 'Fixture heading')"), 'Markdown preview');
+  assert.equal(await run("[...document.querySelectorAll('script')].some(node => node.textContent === 'blocked')"), false);
+  await clickText('Close editor');
+}
+
 export async function smoke({ window, show, getState, directory }: { window: BrowserWindow; show(): void; getState(): MonitorState; directory: string }) {
   const report = path.join(directory, 'result.json');
   const until = async (check: () => boolean | Promise<boolean>, stage = 'renderer or worker', attempts = 160) => {
@@ -96,6 +157,7 @@ export async function smoke({ window, show, getState, directory }: { window: Bro
     await click('Explore');
     await until(() => heading('Explore'), 'Explore navigation');
     await until(() => window.webContents.executeJavaScript("document.body.innerText.includes(' sessions · ')"), 'inventory results');
+    if (process.argv.includes('--monitor-smoke-explore')) await checkExploreEditor(window, directory, until);
     await click('Dashboard');
     await until(() => heading('Subscription usage'), 'dashboard navigation');
     await assert.rejects(window.webContents.executeJavaScript("window.monitor.setWindowMode('nope')"));

@@ -118,7 +118,12 @@ export interface MonitorApi {
   setWindowMode(mode: WindowMode): Promise<void>;
   minimize(): Promise<void>;
   closeWindow(): Promise<void>;
-  inventory(id: ProviderId): Promise<Inventory>;
+  inventory(id: ProviderId, includePlugins?: boolean): Promise<Inventory>;
+  readExploreDocument(provider: ProviderId, id: string): Promise<ExploreDocument>;
+  saveExploreDocument(provider: ProviderId, id: string, revision: string, text: string): Promise<ExploreDocument>;
+  removeExploreItem(provider: ProviderId, id: string): Promise<ExploreRemoval | null>;
+  onExploreConfirmation(callback: (request: ExploreConfirmation) => void): () => void;
+  answerExploreConfirmation(id: string, confirmed: boolean): Promise<void>;
   open(path: string): Promise<void>;
   logs(): Promise<void>;
   reset(): Promise<void>;
