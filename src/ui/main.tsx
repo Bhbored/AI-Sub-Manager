@@ -7,7 +7,7 @@ import { Dashboard } from './features/dashboard.js';
 import { Settings } from './features/settings.js';
 import { Explore } from './features/explore.js';
 import { Widget } from './features/widget.js';
-import '../../generated/theme.css';
+import './theme.css';
 
 declare global {
   interface Window { monitor: MonitorApi }
