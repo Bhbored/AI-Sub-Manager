@@ -14,7 +14,7 @@ import { asRecord } from '../shared/validation.js';
 import { ensureStatusLine, buildCommand, settingsFile } from '../providers/claude/setup.js';
 import { smoke } from './smoke.js';
 import { scanInventory, resolveOpenable } from '../providers/inventory/index.js';
-import { layoutBounds, supportsCornerPin } from './window-layout.js';
+import { layoutBounds, supportsCornerPin, useXWaylandForPinning } from './window-layout.js';
 
 const page = path.join(import.meta.dirname, '../../dist/index.html');
 const asset = (name: string) => path.join(import.meta.dirname, '../../assets', name);
@@ -38,8 +38,11 @@ let storageError = '';
 let statusLine: StatusLine = 'pending';
 let mode: WindowMode = 'compact';
 let compactBounds: Rectangle | undefined;
-let targetDisplay: number | undefined;
+let transition: 'entering' | 'leaving' | undefined;
 const displaySession = process.env.XDG_SESSION_TYPE || (process.env.WAYLAND_DISPLAY ? 'wayland' : undefined);
+if (useXWaylandForPinning(process.platform, displaySession, process.env.DISPLAY, app.commandLine.getSwitchValue('ozone-platform'))) {
+  app.commandLine.appendSwitch('ozone-platform', 'x11');
+}
 const cornerPinAvailable = supportsCornerPin(process.platform, displaySession, app.commandLine.getSwitchValue('ozone-platform'));
 const state = (): MonitorState => ({
   settings, status, cached, storageError, statusLine,
@@ -81,19 +84,45 @@ function show() {
   current.show();
   current.focus();
 }
-function displayFor(current?: BrowserWindow) {
-  return screen.getAllDisplays().find(display => display.id === targetDisplay) ??
-    (current && cornerPinAvailable ? screen.getDisplayMatching(current.getNormalBounds()) : screen.getPrimaryDisplay());
+function normalBoundsFor(view: 'compact' | 'widget') {
+  const workArea = view === 'compact' && compactBounds && cornerPinAvailable
+    ? screen.getDisplayMatching(compactBounds).workArea : screen.getPrimaryDisplay().workArea;
+  return layoutBounds(view, workArea, compactBounds);
 }
-function applyWindowLayout(current: BrowserWindow) {
-  if (mode === 'fullscreen') return;
-  const display = displayFor(current);
-  const bounds = layoutBounds(mode, display.workArea, compactBounds);
+function applyNormalLayout(current: BrowserWindow, view: 'compact' | 'widget') {
+  const bounds = normalBoundsFor(view);
+  if (current.isResizable()) current.setResizable(false);
+  if (process.platform !== 'linux' && current.isMaximizable()) current.setMaximizable(false);
   if (cornerPinAvailable) {
-    current.setAlwaysOnTop(mode === 'widget');
-    current.setBounds(bounds);
+    const pinned = view === 'widget';
+    if (current.isAlwaysOnTop() !== pinned) current.setAlwaysOnTop(pinned);
+    const actual = pinned ? current.getContentBounds() : current.getBounds();
+    if (actual.x !== bounds.x || actual.y !== bounds.y || actual.width !== bounds.width || actual.height !== bounds.height) {
+      if (pinned) current.setContentBounds(bounds);
+      else current.setBounds(bounds);
+    }
+    if (process.platform !== 'linux') current.setMovable(!pinned);
   } else {
     current.setSize(bounds.width, bounds.height);
+  }
+}
+function syncWindowMode(current: BrowserWindow) {
+  if (transition) return;
+  if (mode === 'expanded') {
+    if (current.isMaximized()) return;
+    current.setResizable(true);
+    if (process.platform !== 'linux') current.setMaximizable(true);
+    if (cornerPinAvailable) {
+      current.setAlwaysOnTop(false);
+      if (process.platform !== 'linux') current.setMovable(true);
+    }
+    transition = 'entering';
+    current.maximize();
+  } else if (current.isMaximized()) {
+    transition = 'leaving';
+    current.unmaximize();
+  } else {
+    applyNormalLayout(current, mode);
   }
 }
 function setWindowMode(value: unknown) {
@@ -101,23 +130,12 @@ function setWindowMode(value: unknown) {
   if (!next) throw Error('Invalid window mode.');
   if (mode === next) return;
   const current = window;
-  if (current && mode === 'compact') {
-    compactBounds = current.getNormalBounds();
-    targetDisplay = (cornerPinAvailable ? screen.getDisplayMatching(compactBounds) : screen.getPrimaryDisplay()).id;
+  if (current && mode === 'compact' && !transition && !current.isMaximized()) {
+    compactBounds = current.getBounds();
   }
-  const wasFullscreen = mode === 'fullscreen';
   mode = next;
-  if (current) {
-    if (next === 'fullscreen') {
-      if (cornerPinAvailable) current.setAlwaysOnTop(false);
-      current.setFullScreen(true);
-    } else if (wasFullscreen) {
-      current.setFullScreen(false);
-    } else {
-      applyWindowLayout(current);
-    }
-  }
-  if (next !== 'fullscreen') {
+  if (current) syncWindowMode(current);
+  if (next !== 'expanded') {
     try { store?.write('window-mode', next); }
     catch { log('window.mode.save.failed'); }
   }
@@ -129,43 +147,65 @@ function openPage(destination: 'dashboard' | 'settings') {
   if (mode === 'widget') setWindowMode('compact');
   window?.webContents.send('navigate', destination);
 }
-function createWindow() {
-  const bounds = layoutBounds(mode === 'widget' ? 'widget' : 'compact', displayFor().workArea, compactBounds);
+function createWindow(revealAfterLoad?: () => boolean) {
+  const bounds = normalBoundsFor(mode === 'widget' ? 'widget' : 'compact');
   const current = window = new BrowserWindow({
     show: false, ...bounds, frame: false, resizable: false, maximizable: false,
-    fullscreenable: true, autoHideMenuBar: true, backgroundColor: '#080d13',
+    fullscreenable: false, autoHideMenuBar: true, backgroundColor: '#080d13',
     icon: asset(process.platform === 'win32' ? 'icon.ico' : 'icon.png'), webPreferences: {
       preload: path.join(import.meta.dirname, 'preload.cjs'), contextIsolation: true,
       nodeIntegration: false, sandbox: true
     }
   });
-  applyWindowLayout(current);
+  syncWindowMode(current);
   window.removeMenu();
   window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
   window.webContents.on('will-navigate', event => event.preventDefault());
   current.webContents.on('before-input-event', (event, input) => {
     if (input.type !== 'keyDown' || input.isAutoRepeat) return;
-    if (input.key === 'F11' || (input.key === 'Escape' && mode === 'fullscreen')) {
+    if (input.key === 'F11' || (input.key === 'Escape' && mode === 'expanded')) {
       event.preventDefault();
-      setWindowMode(mode === 'fullscreen' ? 'compact' : 'fullscreen');
+      setWindowMode(mode === 'expanded' ? 'compact' : 'expanded');
     }
   });
-  current.on('leave-full-screen', () => {
-    if (mode === 'fullscreen') setWindowMode('compact');
-    applyWindowLayout(current);
+  current.on('maximize', () => setImmediate(() => {
+    if (current.isDestroyed()) return;
+    if (!transition && mode === 'compact') {
+      compactBounds = current.getNormalBounds();
+      mode = 'expanded';
+      menu();
+      emit();
+    }
+    transition = undefined;
+    syncWindowMode(current);
+  }));
+  current.on('unmaximize', () => setImmediate(() => {
+    if (current.isDestroyed()) return;
+    const requested = transition === 'leaving';
+    transition = undefined;
+    if (!requested && mode === 'expanded') setWindowMode('compact');
+    else syncWindowMode(current);
+  }));
+  current.on('will-move', event => {
+    if (mode === 'widget' && cornerPinAvailable && !transition) event.preventDefault();
+  });
+  current.on('move', () => {
+    if (mode === 'widget' && cornerPinAvailable && !transition) applyNormalLayout(current, 'widget');
   });
   window.webContents.session.setPermissionRequestHandler((_contents, _permission, respond) => respond(false));
   window.on('close', event => {
     if (closing) return;
     if (settings.closeToTray && tray) {
       event.preventDefault();
-      if (mode === 'fullscreen') setWindowMode('compact');
+      if (mode === 'expanded') setWindowMode('compact');
       current.hide();
     }
     else app.quit();
   });
-  window.on('closed', () => { window = null; });
-  void current.loadFile(page).catch(() => log('window.load.failed'));
+  window.on('closed', () => { window = null; transition = undefined; });
+  void current.loadFile(page).then(() => {
+    if (!current.isDestroyed() && revealAfterLoad?.() && !current.isVisible()) show();
+  }).catch(() => log('window.load.failed'));
   return current;
 }
 function send(message: WorkerRequest) { worker?.postMessage(message); }
@@ -175,7 +215,7 @@ function menu() {
     { label: 'AI Usage Monitor', enabled: false }, { type: 'separator' },
     { label: 'Open Dashboard', click: () => openPage('dashboard') }, { label: 'Refresh Now', click: refresh },
     { label: 'Window mode', submenu: windowModes.map((choice, index) => ({
-      label: ['Compact', 'Full screen', 'Desktop widget'][index], type: 'radio',
+      label: ['Compact', 'Maximize', 'Desktop widget'][index], type: 'radio',
       checked: choice === mode, click: () => { show(); setWindowMode(choice); }
     })) },
     { type: 'separator' },
@@ -307,7 +347,7 @@ else {
     } catch { storageError = 'The local database is unavailable. Changes may not survive a restart.'; }
     log('app.start');
     setupStatusLine();
-    const current = createWindow();
+    const current = createWindow(() => !tray || !settings.startMinimized || !process.argv.includes('--startup'));
     try {
       tray = new Tray(asset('tray-icon.png'));
       tray.setToolTip('AI Usage Monitor');
@@ -315,8 +355,8 @@ else {
       else tray.on('double-click', show);
     } catch { log('tray.unavailable'); }
     menu();
-    if (!tray || !settings.startMinimized || !process.argv.includes('--startup')) current.once('ready-to-show', show);
-    const repositionWidget = () => { if (window && mode === 'widget') applyWindowLayout(window); };
+    const repositionWidget = () => { if (window && mode === 'widget') syncWindowMode(window); };
+    screen.on('display-added', repositionWidget);
     screen.on('display-metrics-changed', repositionWidget);
     screen.on('display-removed', repositionWidget);
     powerMonitor.on('resume', () => { send({ type: 'resume' }); checkRenewals(); });

@@ -12,17 +12,23 @@ export function layoutBounds(mode: keyof typeof sizes, area: Rectangle, previous
   const width = Math.min(sizes[mode].width, area.width - 2 * insetX);
   const height = Math.min(sizes[mode].height, area.height - 2 * insetY);
   const right = area.x + area.width - width - insetX;
-  const bottom = area.y + area.height - height - insetY;
   if (mode === 'widget') return { x: right, y: area.y + insetY, width, height };
-  const centerX = Math.round(area.x + (area.width - width) / 2);
-  const centerY = Math.round(area.y + (area.height - height) / 2);
+  if (previous) return {
+    x: Math.min(area.x + area.width - width, Math.max(area.x, previous.x)),
+    y: Math.min(area.y + area.height - height, Math.max(area.y, previous.y)),
+    width, height
+  };
   return {
-    x: Math.min(right, Math.max(area.x + insetX, previous?.x ?? centerX)),
-    y: Math.min(bottom, Math.max(area.y + insetY, previous?.y ?? centerY)),
+    x: Math.round(area.x + (area.width - width) / 2),
+    y: Math.round(area.y + (area.height - height) / 2),
     width, height
   };
 }
 
 export function supportsCornerPin(platform: NodeJS.Platform, session: string | undefined, ozone: string) {
   return platform !== 'linux' || ozone === 'x11' || (ozone !== 'wayland' && session?.toLowerCase() !== 'wayland');
+}
+
+export function useXWaylandForPinning(platform: NodeJS.Platform, session: string | undefined, display: string | undefined, ozone: string) {
+  return platform === 'linux' && session?.toLowerCase() === 'wayland' && Boolean(display) && !ozone;
 }

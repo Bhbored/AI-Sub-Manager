@@ -54,16 +54,18 @@ function App() {
   const home = page === 'dashboard';
   const mode = data?.view.mode ?? 'compact';
   const widget = mode === 'widget';
+  const dashboardWidth = mode === 'expanded' ? 'max-w-[100rem]' : 'max-w-6xl';
   const changeMode = (next: WindowMode) => {
     if (next === 'widget' || widget) setPage('dashboard');
     void run(() => window.monitor.setWindowMode(next));
   };
   const refresh = () => void run(window.monitor.refresh);
   return <>
-    <WindowBar mode={mode} onMode={changeMode} onMinimize={() => void run(window.monitor.minimize)}
+    <WindowBar mode={mode} cornerPinAvailable={data?.view.cornerPinAvailable ?? true}
+      onMode={changeMode} onMinimize={() => void run(window.monitor.minimize)}
       onClose={() => void run(window.monitor.closeWindow)}/>
     {!widget && <nav aria-label="Main navigation" className="border-b border-edge bg-panel/40">
-      <div className="mx-auto flex max-w-6xl gap-1 px-4 md:px-8">
+      <div className={`mx-auto flex gap-1 px-4 md:px-8 ${dashboardWidth}`}>
         {navigation.map(({ page: destination, label, icon: Icon }) => <button key={destination} type="button"
           aria-label={label} aria-current={page === destination ? 'page' : undefined}
           onClick={() => setPage(destination)}
@@ -73,7 +75,7 @@ function App() {
         </button>)}
       </div>
     </nav>}
-    <main className={widget ? 'p-3' : 'mx-auto max-w-6xl px-4 py-5 md:px-8 md:py-8'}>
+    <main data-window-mode={mode} className={widget ? 'p-3' : `mx-auto px-4 py-5 md:px-8 md:py-8 ${dashboardWidth}`}>
       {(error || data?.storageError) && <p className="mb-3 rounded-md border border-edge bg-panel p-3 text-xs text-warning" role="alert">{error || data?.storageError}</p>}
       {!data ? <p className="text-xs text-muted">Starting monitor…</p> : widget
         ? <Widget data={data} now={now} onRefresh={refresh}/>

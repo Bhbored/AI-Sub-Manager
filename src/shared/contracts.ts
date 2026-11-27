@@ -46,7 +46,7 @@ export type ProviderStatus = UsageSnapshot | {
 
 export type StatusLine = 'pending' | 'ok' | 'set' | 'updated' | 'foreign' | 'no-node' | 'error';
 export type Page = 'dashboard' | 'settings' | 'explore';
-export const windowModes = ['compact', 'fullscreen', 'widget'] as const;
+export const windowModes = ['compact', 'expanded', 'widget'] as const;
 export type WindowMode = (typeof windowModes)[number];
 
 export interface InventoryProject {
