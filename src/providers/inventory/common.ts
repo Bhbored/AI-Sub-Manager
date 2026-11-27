@@ -1,4 +1,4 @@
-import { open, readdir, stat } from 'node:fs/promises';
+import { lstat, open, readdir, stat } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import type { Inventory, InventoryFile, InventoryMcp, InventorySkill } from '../../shared/contracts.js';
 import { asRecord } from '../../shared/validation.js';
@@ -88,7 +88,9 @@ export async function skillsIn(directory: string, source: string): Promise<Inven
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
     const folder = join(directory, entry.name);
     try {
-      const fields = frontmatter(await readHead(join(folder, 'SKILL.md'), 4096));
+      const file = join(folder, 'SKILL.md');
+      if (!(await lstat(file)).isFile()) continue;
+      const fields = frontmatter(await readHead(file, 4096));
       skills.push({ name: fields.name || entry.name, description: (fields.description ?? '').slice(0, 240), source, path: folder });
     } catch {}
   }

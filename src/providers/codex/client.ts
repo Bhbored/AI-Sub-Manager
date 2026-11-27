@@ -20,7 +20,7 @@ export class CodexClient {
   private pending = new Map<number, PendingRequest>();
   private id = 0;
 
-  constructor(private readonly startProcess: () => AppServerProcess, private readonly version: string) {}
+  constructor(private readonly startProcess: () => AppServerProcess, private readonly version: string, private readonly experimental = false) {}
 
   async start() {
     const child = this.child = this.startProcess();
@@ -40,7 +40,10 @@ export class CodexClient {
       if (message.error) pending.reject(Error('Codex request failed.'));
       else pending.resolve(message.result);
     });
-    await this.request('initialize', { clientInfo: { name: 'ai_usage_monitor', title: 'AI Usage Monitor', version: this.version } });
+    await this.request('initialize', {
+      clientInfo: { name: 'ai_usage_monitor', title: 'AI Usage Monitor', version: this.version },
+      ...(this.experimental ? { capabilities: { experimentalApi: true } } : {})
+    });
     child.stdin.write(JSON.stringify({ method: 'initialized' }) + '\n');
   }
 

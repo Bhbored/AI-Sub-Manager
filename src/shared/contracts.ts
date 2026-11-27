@@ -50,6 +50,7 @@ export const windowModes = ['compact', 'expanded', 'widget'] as const;
 export type WindowMode = (typeof windowModes)[number];
 
 export interface InventoryProject {
+  id?: string;
   name: string;
   /** Working directory recorded in the sessions, when it could be read. */
   path: string | null;
@@ -61,11 +62,28 @@ export interface InventoryProject {
   created: string | null;
   updated: string | null;
 }
-export interface InventorySkill { name: string; description: string; source: string; path: string }
-export interface InventoryPlugin { name: string; version: string | null; enabled: boolean | null; source: string }
+export interface InventorySkill { name: string; description: string; source: string; path: string; id?: string }
+export interface InventoryPlugin { name: string; version: string | null; enabled: boolean | null; source: string; id?: string; selector?: string; scope?: string }
 /** Only the launcher name or URL without credentials is kept; arguments and environment values are never read. */
 export interface InventoryMcp { name: string; transport: string; target: string; source: string; enabled: boolean | null }
-export interface InventoryFile { label: string; path: string; bytes: number; modified: string | null }
+export interface InventoryFile { label: string; path: string; bytes: number; modified: string | null; id?: string }
+export interface ExploreDocument {
+  label: string;
+  language: 'json' | 'toml' | 'markdown';
+  text: string;
+  revision: string;
+  writable: boolean;
+  revealLine?: number;
+}
+export interface ExploreRemoval {
+  inventory: Inventory;
+  message: string;
+}
+export interface ExploreConfirmation {
+  id: string;
+  message: string;
+  detail: string;
+}
 export interface Inventory {
   provider: ProviderId;
   home: string;

@@ -30,7 +30,7 @@ function splitPath(header: string): string[] {
 /** Minimal TOML reader: table headers plus scalar string and boolean values. Arrays and inline tables are skipped. */
 export function scanToml(text: string): TomlTable[] {
   const tables: TomlTable[] = [{ path: [], values: {} }];
-  for (const raw of text.replace(/^﻿/, '').split(/\r?\n/)) {
+  for (const raw of text.replace(/^ï»¿/, '').split(/\r?\n/)) {
     const line = raw.trim();
     if (!line || line.startsWith('#')) continue;
     const header = /^\[\s*([^[\]]+?)\s*\]\s*(?:#.*)?$/.exec(line);
@@ -83,7 +83,7 @@ async function scanSessions(home: string, warnings: string[]): Promise<Inventory
     try {
       const info = await stat(file);
       const path = cwdFrom(await readHead(file, 65536));
-      const key = path ? path.toLowerCase() : '';
+      const key = (process.platform === 'win32' ? path?.toLowerCase() : path) ?? '';
       const created = startedFrom(file.split(/[\\/]/).pop() ?? '') ?? (info.birthtimeMs > 0 ? info.birthtimeMs : info.mtimeMs);
       const group = groups.get(key) ?? { path, sessions: 0, archived: 0, bytes: 0, created: Infinity, updated: 0, folder: join(home, archived ? 'archived_sessions' : 'sessions') };
       group.sessions++;
