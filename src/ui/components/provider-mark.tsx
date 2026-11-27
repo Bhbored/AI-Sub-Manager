@@ -1,10 +1,14 @@
-﻿import { AudioWaveform, Terminal } from 'lucide-react';
-import type { ProviderId } from '../../shared/contracts.js';
+﻿import type { ProviderId } from '../../shared/contracts.js';
+import codexMark from '../../../assets/providers/codex.png';
+import claudeMark from '../../../assets/providers/claude.png';
+
+const providerMarks: Record<ProviderId, string> = {
+  codex: codexMark,
+  claude: claudeMark
+};
 
 export function ProviderMark({ id }: { id: ProviderId }) {
-  const Icon = id === 'codex' ? Terminal : AudioWaveform;
-  return <span aria-hidden="true" className={'grid size-9 shrink-0 place-items-center rounded-lg border bg-field [&>svg]:block ' +
-    (id === 'codex' ? 'border-accent/25 text-accent' : 'border-warning/25 text-warning')}>
-    <Icon size={17} strokeWidth={1.8}/>
+  return <span aria-hidden="true" className="grid size-9 shrink-0 place-items-center overflow-hidden rounded-lg border border-edge bg-field">
+    <img src={providerMarks[id]} alt="" className="block size-8 object-contain"/>
   </span>;
 }
